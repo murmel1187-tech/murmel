@@ -62,10 +62,8 @@ public final class PackMixer {
             String w = LowFire.apply(out, settings.lowFire);
             if (w != null) warnings.add(w);
         }
-        if (settings.sideShield) {
-            SideShield.write(out,
-                    SideShield.clean(settings.shieldLeft, MixSettings.DEFAULT_SHIELD_LEFT),
-                    SideShield.clean(settings.shieldRight, MixSettings.DEFAULT_SHIELD_RIGHT));
+        if (settings.sideShield > 0) {
+            SideShield.write(out, settings.sideShield == 1 ? 0.9 : 1.25);
         }
 
         String mcmeta = "{\"pack\":{\"description\":\"MurmelsVisuals Mix\","

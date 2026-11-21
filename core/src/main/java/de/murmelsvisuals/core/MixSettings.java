@@ -19,12 +19,10 @@ public final class MixSettings {
     public String basePack = null; // null = kein Basis-Pack
     /** Low Fire: 0 = aus, 1 = mittel, 2 = niedrig. */
     public int lowFire = 0;
-    public boolean sideShield = false;
-    /** Position des Schilds beim Blocken (x,y,z), bei Bedarf in der Config anpassen. */
-    public static final String DEFAULT_SHIELD_LEFT = "10.5,-3.6,-10";
-    public static final String DEFAULT_SHIELD_RIGHT = "-10.5,-2,-10";
-    public String shieldLeft = DEFAULT_SHIELD_LEFT;
-    public String shieldRight = DEFAULT_SHIELD_RIGHT;
+    /** Side Shield: 0 = aus, 1 = an (klein beim Blocken), 2 = an (normale Größe beim Blocken). */
+    public int sideShield = 0;
+    /** Menühintergrund durchsichtig statt unscharf. */
+    public boolean clearBackground = true;
     public final Map<Category, String> choices = new EnumMap<>(Category.class);
 
     public String choiceFor(Category c) {
@@ -52,9 +50,14 @@ public final class MixSettings {
         s.basePack = base.isEmpty() ? null : base;
         try { s.lowFire = Math.max(0, Math.min(2, Integer.parseInt(p.getProperty("lowFire", "0").trim()))); }
         catch (NumberFormatException e) { s.lowFire = 0; }
-        s.sideShield = Boolean.parseBoolean(p.getProperty("sideShield", "false").trim());
-        s.shieldLeft = p.getProperty("sideShield.left", s.shieldLeft);
-        s.shieldRight = p.getProperty("sideShield.right", s.shieldRight);
+        String ss = p.getProperty("sideShield", "0").trim();
+        if (ss.equalsIgnoreCase("true")) s.sideShield = 1;
+        else if (ss.equalsIgnoreCase("false")) s.sideShield = 0;
+        else {
+            try { s.sideShield = Math.max(0, Math.min(2, Integer.parseInt(ss))); }
+            catch (NumberFormatException e) { s.sideShield = 0; }
+        }
+        s.clearBackground = Boolean.parseBoolean(p.getProperty("clearBackground", "true").trim());
         for (Category c : Category.values()) {
             String v = p.getProperty("cat." + c.id());
             if (v != null && !v.isEmpty()) s.choices.put(c, v);
@@ -66,9 +69,8 @@ public final class MixSettings {
         Properties p = new Properties();
         p.setProperty("base", basePack == null ? "" : basePack);
         p.setProperty("lowFire", Integer.toString(lowFire));
-        p.setProperty("sideShield", Boolean.toString(sideShield));
-        p.setProperty("sideShield.left", shieldLeft);
-        p.setProperty("sideShield.right", shieldRight);
+        p.setProperty("sideShield", Integer.toString(sideShield));
+        p.setProperty("clearBackground", Boolean.toString(clearBackground));
         for (Map.Entry<Category, String> e : choices.entrySet()) {
             if (!e.getValue().isEmpty()) p.setProperty("cat." + e.getKey().id(), e.getValue());
         }

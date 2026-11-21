@@ -68,7 +68,7 @@ public class MixScreen extends Screen {
             packs = List.of();
         }
 
-        MenuBlur.disable(this.minecraft.options); // Hintergrund klar statt unscharf
+        if (settings.clearBackground) MenuBlur.disable(this.minecraft.options); // Hintergrund klar statt unscharf
 
         final Category[] cats = Category.values();
         final Category cat = cats[catIndex];
@@ -84,7 +84,7 @@ public class MixScreen extends Screen {
         // ---- Schalter oben: Side Shield | Basis-Pack | Low Fire
         int bw = (gw - 8) / 3;
         addRenderableWidget(Button.builder(shieldLabel(), b -> {
-            settings.sideShield = !settings.sideShield;
+            settings.sideShield = (settings.sideShield + 1) % 3;
             b.setMessage(shieldLabel());
         }).bounds(gx0, 20, bw, 20).build());
         addRenderableWidget(Button.builder(baseLabel(bw - 10), b -> {
@@ -248,12 +248,28 @@ public class MixScreen extends Screen {
                 : "Zeile " + (rowScroll + 1) + " von " + totalRows + "  -  Mausrad zum Scrollen"));
         addRenderableWidget(status);
 
-        // ---- Unten: Anwenden | Fertig
+        // ---- Unten: Durchsicht | Anwenden | Fertig
         int by = this.height - 26;
+        int bw3 = 92;
+        addRenderableWidget(Button.builder(clearLabel(bw3 - 8), b -> {
+            settings.clearBackground = !settings.clearBackground;
+            if (settings.clearBackground) MenuBlur.disable(this.minecraft.options);
+            else MenuBlur.restore();
+            b.setMessage(clearLabel(bw3 - 8));
+        }).bounds(centerX - bw3 - bw3 / 2 - 4, by, bw3, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Anwenden"), b -> apply())
-                .bounds(centerX - 104, by, 100, 20).build());
+                .bounds(centerX - bw3 / 2, by, bw3, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Fertig"), b -> onClose())
-                .bounds(centerX + 4, by, 100, 20).build());
+                .bounds(centerX + bw3 / 2 + 4, by, bw3, 20).build());
+    }
+
+    /**
+     * Sagt Minecraft, dass dieses Menü wie ein Inventar behandelt wird: Dann gibt es nur eine leichte
+     * Abdunklung statt der Hintergrund-Unschärfe, und man sieht das Spiel dahinter klar.
+     */
+    // (bewusst ohne @Override: so bricht der Bau nicht, falls eine Version die Methode nicht kennt)
+    public boolean isInGameUi() {
+        return settings.clearBackground;
     }
 
     /** Mausrad: links über der Kategorie-Liste scrollt die Liste, sonst das Pack-Gitter. */
@@ -309,12 +325,18 @@ public class MixScreen extends Screen {
     }
 
     private Component shieldLabel() {
-        return Component.literal("Side Shield: " + (settings.sideShield ? "An" : "Aus"));
+        String v = settings.sideShield == 0 ? "Aus" : settings.sideShield == 1 ? "Klein" : "Normal";
+        return Component.literal("Side Shield: " + v);
     }
 
     private Component fireLabel() {
         String v = settings.lowFire == 0 ? "Aus" : settings.lowFire == 1 ? "Mittel" : "Niedrig";
         return Component.literal("Low Fire: " + v);
+    }
+
+    private Component clearLabel(int maxWidth) {
+        return Component.literal(this.font.plainSubstrByWidth(
+                "Durchsicht: " + (settings.clearBackground ? "An" : "Aus"), maxWidth));
     }
 
     private static String shortName(String id) {

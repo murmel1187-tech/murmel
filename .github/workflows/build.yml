@@ -1,0 +1,33 @@
+name: Build MurmelsVisuals
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mc: "1.21.11"
+            java: "21"
+          - mc: "26.3"
+            java: "25"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.6.0"
+      - name: Build
+        working-directory: mc-${{ matrix.mc }}
+        run: gradle build --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MurmelsVisuals-${{ matrix.mc }}
+          path: mc-${{ matrix.mc }}/build/libs/MurmelsVisuals-${{ matrix.mc }}-*[0-9].jar

@@ -8,7 +8,6 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.resources.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 /** Alles, was sich zwischen den Minecraft-Versionen unterscheidet, steht hier. */
 final class Compat {
@@ -29,7 +28,7 @@ final class Compat {
         KeyMapping.Category category = KeyMapping.Category.register(
                 Identifier.fromNamespaceAndPath("murmelsvisuals", "main"));
         openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.murmelsvisuals.open", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_M, category));
+                "key.murmelsvisuals.open", InputConstants.Type.KEYBOARD, InputConstants.KEY_M, category));
     }
 
     static boolean openKeyPressed() {

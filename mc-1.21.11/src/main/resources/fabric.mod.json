@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "murmelsvisuals",
+  "version": "${version}",
+  "name": "MurmelsVisuals",
+  "description": "Mische Texturen aus mehreren Resource Packs ingame zu einem einzigen Pack. Menü per /murmels.",
+  "authors": ["Murmel"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": { "client": ["de.murmelsvisuals.client.MurmelsVisualsClient"] },
+  "depends": {
+    "fabricloader": ">=0.18.1",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

@@ -29,6 +29,11 @@ public final class Preview {
         FILES.put(Category.BLOCKS, new String[] {"block/obsidian.png"});
         FILES.put(Category.ITEMS, new String[] {"item/diamond.png"});
         FILES.put(Category.PARTICLES, new String[] {"particle/flame.png"});
+        FILES.put(Category.HEARTS, new String[] {"gui/sprites/hud/heart/full.png", "gui/sprites/hud/heart/container.png"});
+        FILES.put(Category.HUNGER, new String[] {"gui/sprites/hud/food_full.png", "gui/sprites/hud/food_empty.png"});
+        FILES.put(Category.HOTBAR, new String[] {"gui/sprites/hud/hotbar_selection.png", "gui/sprites/hud/hotbar.png"});
+        FILES.put(Category.EXP, new String[] {"gui/sprites/hud/experience_bar_progress.png", "gui/sprites/hud/experience_bar_background.png"});
+        FILES.put(Category.GUI, new String[] {"gui/container/inventory.png"});
         FILES.put(Category.SKY, new String[] {"environment/sun.png"});
     }
 
@@ -50,32 +55,42 @@ public final class Preview {
     static int[] downscale(BufferedImage img, int res) {
         int w = img.getWidth();
         int h = img.getHeight();
-        // Animierte Texturen (Streifen) -> nur das erste Bild
-        if (h > w && h % w == 0) h = w;
+        if (h > w && h % w == 0) h = w;   // animierte Texturen (Streifen) -> nur das erste Bild
+        if (w > 3 * h) w = 3 * h;         // sehr breite Leisten -> nur der linke Teil
 
-        int[] out = new int[res * res];
-        for (int dy = 0; dy < res; dy++) {
-            for (int dx = 0; dx < res; dx++) {
-                int x0 = dx * w / res, x1 = Math.max(x0 + 1, (dx + 1) * w / res);
-                int y0 = dy * h / res, y1 = Math.max(y0 + 1, (dy + 1) * h / res);
+        // Seitenverhältnis behalten, in der Mitte des res x res Felds platzieren
+        int dw, dh;
+        if (w >= h) {
+            dw = res;
+            dh = Math.max(1, Math.round((float) res * h / w));
+        } else {
+            dh = res;
+            dw = Math.max(1, Math.round((float) res * w / h));
+        }
+        int ox = (res - dw) / 2;
+        int oy = (res - dh) / 2;
+
+        int[] out = new int[res * res]; // 0 = transparent
+        for (int dy = 0; dy < dh; dy++) {
+            for (int dx = 0; dx < dw; dx++) {
+                int x0 = dx * w / dw, x1 = Math.max(x0 + 1, (dx + 1) * w / dw);
+                int y0 = dy * h / dh, y1 = Math.max(y0 + 1, (dy + 1) * h / dh);
                 long a = 0, r = 0, g = 0, b = 0;
                 int n = 0;
                 for (int y = y0; y < y1 && y < h; y++) {
                     for (int x = x0; x < x1 && x < w; x++) {
-                        int p = img.getRGB(x, y);
-                        int pa = p >>> 24;
+                        int px = img.getRGB(x, y);
+                        int pa = px >>> 24;
                         a += pa;
-                        r += (long) ((p >> 16) & 0xFF) * pa;
-                        g += (long) ((p >> 8) & 0xFF) * pa;
-                        b += (long) (p & 0xFF) * pa;
+                        r += (long) ((px >> 16) & 0xFF) * pa;
+                        g += (long) ((px >> 8) & 0xFF) * pa;
+                        b += (long) (px & 0xFF) * pa;
                         n++;
                     }
                 }
-                if (n == 0 || a == 0) {
-                    out[dy * res + dx] = 0; // transparent
-                } else {
+                if (n > 0 && a > 0) {
                     int ia = (int) (a / n);
-                    out[dy * res + dx] = (ia << 24) | ((int) (r / a) << 16) | ((int) (g / a) << 8) | (int) (b / a);
+                    out[(oy + dy) * res + ox + dx] = (ia << 24) | ((int) (r / a) << 16) | ((int) (g / a) << 8) | (int) (b / a);
                 }
             }
         }

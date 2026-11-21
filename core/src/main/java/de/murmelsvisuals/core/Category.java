@@ -42,7 +42,18 @@ public enum Category {
     PARTICLES("Partikel", Pat.join(
         Pat.dir("assets/[^/]+/textures/particle"),
         Pat.dir("assets/[^/]+/particles"))),
-    GUI("GUI & Hotbar", Pat.join(
+    HEARTS("Herzen", Pat.join(
+        Pat.dir("assets/[^/]+/textures/gui/sprites/hud/heart"),
+        Pat.of("assets/[^/]+/textures/gui/sprites/hud/armor_[a-z_]+\\.png(\\.mcmeta)?"))),
+    HUNGER("Hunger", Pat.of(
+        "assets/[^/]+/textures/gui/sprites/hud/food_[a-z_]+\\.png(\\.mcmeta)?")),
+    HOTBAR("Hotbar", Pat.of(
+        "assets/[^/]+/textures/gui/sprites/hud/hotbar[a-z_]*\\.png(\\.mcmeta)?",
+        "assets/[^/]+/textures/gui/widgets\\.png")),
+    EXP("EXP-Leiste", Pat.of(
+        "assets/[^/]+/textures/gui/sprites/hud/experience_[a-z_]+\\.png(\\.mcmeta)?",
+        "assets/[^/]+/textures/gui/sprites/hud/jump_bar_[a-z_]+\\.png(\\.mcmeta)?")),
+    GUI("GUI & Menüs", Pat.join(
         Pat.dir("assets/[^/]+/textures/gui"),
         Pat.dir("assets/[^/]+/textures/misc"))),
     CUSTOM_SKY("Custom Skybox", Pat.join(

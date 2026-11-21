@@ -105,29 +105,39 @@ public class MixScreen extends Screen {
 
         int top = 72;
         int bottom = this.height - 46;
-        int res = Math.max(6, Math.min(16, (bottom - top - 22) / LINE_H));
         int blockW = Math.max(1, this.font.width(BLOCK));
         int cpp = Math.max(1, Math.round(9f / blockW)); // Zeichen pro Bildpunkt, damit er etwa quadratisch wirkt
         int pxW = cpp * blockW;
-        int cellW = res * pxW + 8;
-        int cellH = res * LINE_H + 8 + 12;
-        int cols = Math.max(1, (this.width - 56) / (cellW + 4));
-        int pages = Math.max(1, (options.size() + cols - 1) / cols);
+
+        // Größte Vorschau wählen, bei der mindestens 8 Felder pro Seite passen
+        int res = 6, cols = 1, rows = 1, cellW = 0, cellH = 0;
+        for (int r = 12; r >= 6; r--) {
+            int cw = r * pxW + 8;
+            int ch = r * LINE_H + 8 + 12;
+            int c = Math.max(1, (this.width - 40) / (cw + 4));
+            int rw = Math.max(1, (bottom - top + 4) / (ch + 4));
+            res = r; cols = c; rows = rw; cellW = cw; cellH = ch;
+            if (c * rw >= 8) break;
+        }
+        int perPage = cols * rows;
+        int pages = Math.max(1, (options.size() + perPage - 1) / perPage);
         page = Math.max(0, Math.min(page, pages - 1));
-        int from = page * cols;
-        int to = Math.min(options.size(), from + cols);
-        int shown = to - from;
-        int x0 = cx - (shown * cellW + (shown - 1) * 4) / 2;
+        int from = page * perPage;
+        int to = Math.min(options.size(), from + perPage);
+        int usedCols = Math.min(cols, options.size());
+        int x0 = cx - (usedCols * cellW + (usedCols - 1) * 4) / 2;
 
         String current = settings.choiceFor(cat);
         for (int i = from; i < to; i++) {
             final String value = options.get(i);
-            int x = x0 + (i - from) * (cellW + 4);
+            int k = i - from;
+            int x = x0 + (k % cols) * (cellW + 4);
+            int y = top + (k / cols) * (cellH + 4);
 
             addRenderableWidget(Button.builder(Component.empty(), b -> {
                 settings.choices.put(cat, value);
                 rebuildWidgets();
-            }).bounds(x, top, cellW, cellH).build());
+            }).bounds(x, y, cellW, cellH).build());
 
             // Welches Pack liefert das Bild für dieses Feld?
             String previewPack = value.equals(MixSettings.OFF) ? null
@@ -143,16 +153,16 @@ public class MixScreen extends Screen {
                         int rgb = solid ? (p & 0xFFFFFF) : 0x262626;
                         row.append(Component.literal(BLOCK.repeat(cpp)).withStyle(Style.EMPTY.withColor(rgb)));
                     }
-                    addRenderableWidget(new StringWidget(x + (cellW - res * pxW) / 2, top + 4 + r * LINE_H,
+                    addRenderableWidget(new StringWidget(x + (cellW - res * pxW) / 2, y + 4 + r * LINE_H,
                             res * pxW, LINE_H, row, this.font));
                 }
             } else {
                 String hint = value.equals(MixSettings.OFF) ? "Vanilla"
-                        : (previewPack == null ? "-" : "kein Vorschaubild");
+                        : (previewPack == null ? "-" : "kein Bild");
                 Component hc = Component.literal(this.font.plainSubstrByWidth(hint, cellW - 6))
                         .withStyle(Style.EMPTY.withColor(0xAAAAAA));
                 int hw = this.font.width(hc);
-                addRenderableWidget(new StringWidget(x + (cellW - hw) / 2, top + cellH / 2 - 10, hw, LINE_H, hc, this.font));
+                addRenderableWidget(new StringWidget(x + (cellW - hw) / 2, y + cellH / 2 - 10, hw, LINE_H, hc, this.font));
             }
 
             boolean selected = current.equals(value);
@@ -161,7 +171,7 @@ public class MixScreen extends Screen {
             String text = this.font.plainSubstrByWidth((selected ? "\u2714 " : "") + name, cellW - 6);
             Component nc = Component.literal(text).withStyle(Style.EMPTY.withColor(selected ? 0x55FF55 : 0xFFFFFF));
             int nw = this.font.width(nc);
-            addRenderableWidget(new StringWidget(x + (cellW - nw) / 2, top + cellH - 12, nw, LINE_H, nc, this.font));
+            addRenderableWidget(new StringWidget(x + (cellW - nw) / 2, y + cellH - 12, nw, LINE_H, nc, this.font));
         }
 
         // Status

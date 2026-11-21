@@ -6,7 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -17,7 +19,7 @@ public final class PackMixer {
 
     private static final String MARKER = ".murmelsvisuals";
 
-    public record Result(int filesCopied, Path outputDir) {}
+    public record Result(int filesCopied, Path outputDir, List<String> warnings) {}
 
     /**
      * @param resourcepacksDir  Ordner mit deinen Packs
@@ -54,10 +56,21 @@ public final class PackMixer {
             }
         }
 
+        List<String> warnings = new ArrayList<>();
+        if (settings.lowFire > 0) {
+            String w = LowFire.apply(out, settings.lowFire);
+            if (w != null) warnings.add(w);
+        }
+        if (settings.sideShield) {
+            SideShield.write(out,
+                    SideShield.clean(settings.shieldLeft, "22,-2,-11"),
+                    SideShield.clean(settings.shieldRight, "-22,-2,-11"));
+        }
+
         String mcmeta = "{\"pack\":{\"description\":\"MurmelsVisuals Mix\","
                 + "\"min_format\":" + packFormat + ",\"max_format\":" + packFormat + "}}";
         Files.writeString(out.resolve("pack.mcmeta"), mcmeta, StandardCharsets.UTF_8);
-        return new Result(copied, out);
+        return new Result(copied, out, warnings);
     }
 
     private static void prepareOutput(Path out) throws IOException {

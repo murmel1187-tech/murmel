@@ -10,9 +10,11 @@ public class MurmelsVisualsClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         Compat.registerCommand("murmels", () -> openRequested = true);
+        Compat.registerOpenKey();
 
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
-            if (openRequested) {
+            boolean keyPressed = Compat.openKeyPressed();
+            if (openRequested || keyPressed) {
                 openRequested = false;
                 Compat.openScreen(mc, new MixScreen(Compat.currentScreen(mc)));
             }

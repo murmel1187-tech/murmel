@@ -24,7 +24,7 @@ public enum Category {
         Pat.item(".*_(helmet|chestplate|leggings|boots)|elytra"))),
     SHIELD("Schilde", Pat.join(
         Pat.dir("assets/[^/]+/textures/entity/shield"),
-        Pat.item("shield"))),
+        Pat.item("shield(_blocking)?"))),
     POTIONS("Tränke", Pat.item("potion|splash_potion|lingering_potion|glass_bottle|experience_bottle")),
     GAPPLE("Äpfel (Gapple)", Pat.item("golden_apple|enchanted_golden_apple|apple")),
     PEARL("Perlen & Feuerwerk", Pat.item("ender_pearl|ender_eye|fire_charge|firework_rocket|wind_charge")),
@@ -45,6 +45,12 @@ public enum Category {
     GUI("GUI & Hotbar", Pat.join(
         Pat.dir("assets/[^/]+/textures/gui"),
         Pat.dir("assets/[^/]+/textures/misc"))),
+    CUSTOM_SKY("Custom Skybox", Pat.join(
+        Pat.dir("assets/[^/]+/optifine/sky"),
+        Pat.dir("assets/[^/]+/mcpatcher/sky"),
+        Pat.dir("assets/[^/]+/sky"),
+        Pat.dir("assets/[^/]+/textures/sky"),
+        Pat.dir("assets/fabricskyboxes"))),
     SKY("Himmel & Wetter", Pat.join(
         Pat.dir("assets/[^/]+/textures/environment"),
         Pat.dir("assets/[^/]+/textures/colormap"))),

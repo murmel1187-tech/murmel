@@ -17,6 +17,12 @@ public final class MixSettings {
     public static final String OFF = "<off>";
 
     public String basePack = null; // null = kein Basis-Pack
+    /** Low Fire: 0 = aus, 1 = mittel, 2 = niedrig. */
+    public int lowFire = 0;
+    public boolean sideShield = false;
+    /** Verschiebung des Schilds beim Blocken (x,y,z), bei Bedarf in der Config anpassen. */
+    public String shieldLeft = "22,-2,-11";
+    public String shieldRight = "-22,-2,-11";
     public final Map<Category, String> choices = new EnumMap<>(Category.class);
 
     public String choiceFor(Category c) {
@@ -42,6 +48,11 @@ public final class MixSettings {
         }
         String base = p.getProperty("base", "");
         s.basePack = base.isEmpty() ? null : base;
+        try { s.lowFire = Math.max(0, Math.min(2, Integer.parseInt(p.getProperty("lowFire", "0").trim()))); }
+        catch (NumberFormatException e) { s.lowFire = 0; }
+        s.sideShield = Boolean.parseBoolean(p.getProperty("sideShield", "false").trim());
+        s.shieldLeft = p.getProperty("shield.left", s.shieldLeft);
+        s.shieldRight = p.getProperty("shield.right", s.shieldRight);
         for (Category c : Category.values()) {
             String v = p.getProperty("cat." + c.id());
             if (v != null && !v.isEmpty()) s.choices.put(c, v);
@@ -52,6 +63,10 @@ public final class MixSettings {
     public void save(Path file) throws IOException {
         Properties p = new Properties();
         p.setProperty("base", basePack == null ? "" : basePack);
+        p.setProperty("lowFire", Integer.toString(lowFire));
+        p.setProperty("sideShield", Boolean.toString(sideShield));
+        p.setProperty("shield.left", shieldLeft);
+        p.setProperty("shield.right", shieldRight);
         for (Map.Entry<Category, String> e : choices.entrySet()) {
             if (!e.getValue().isEmpty()) p.setProperty("cat." + e.getKey().id(), e.getValue());
         }

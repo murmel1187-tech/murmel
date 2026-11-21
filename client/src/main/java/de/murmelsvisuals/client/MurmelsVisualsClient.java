@@ -1,8 +1,6 @@
 package de.murmelsvisuals.client;
 
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 
 public class MurmelsVisualsClient implements ClientModInitializer {
@@ -11,16 +9,12 @@ public class MurmelsVisualsClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-            dispatcher.register(ClientCommandManager.literal("murmels").executes(ctx -> {
-                openRequested = true;
-                return 1;
-            })));
+        Compat.registerCommand("murmels", () -> openRequested = true);
 
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             if (openRequested) {
                 openRequested = false;
-                mc.setScreen(new MixScreen(mc.screen));
+                Compat.openScreen(mc, new MixScreen(Compat.currentScreen(mc)));
             }
         });
     }

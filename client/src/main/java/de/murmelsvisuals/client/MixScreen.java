@@ -40,7 +40,7 @@ public class MixScreen extends Screen {
             packs = List.of();
         }
 
-        addRenderableWidget(new StringWidget(0, 8, this.width, 9, this.title, this.font).alignCenter());
+        addRenderableWidget(centeredText(8, this.title));
 
         final int cols = 4, gap = 4;
         int w = Math.min(130, (this.width - 20 - gap * (cols - 1)) / cols);
@@ -69,11 +69,9 @@ public class MixScreen extends Screen {
         int rows = (cats.length + cols - 1) / cols;
         int sy = y + rows * 24 + 4;
 
-        status = new StringWidget(0, sy, this.width, 9,
-                Component.literal(packs.isEmpty()
-                        ? "Keine Packs in .minecraft/resourcepacks gefunden."
-                        : packs.size() + " Packs gefunden. Klick = nächstes Pack."),
-                this.font).alignCenter();
+        status = centeredText(sy, Component.literal(packs.isEmpty()
+                ? "Keine Packs in .minecraft/resourcepacks gefunden."
+                : packs.size() + " Packs gefunden. Klick = nächstes Pack."));
         addRenderableWidget(status);
 
         int by = this.height - 28;
@@ -81,6 +79,21 @@ public class MixScreen extends Screen {
                 .bounds(this.width / 2 - 102, by, 100, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Fertig"), b -> onClose())
                 .bounds(this.width / 2 + 2, by, 100, 20).build());
+    }
+
+    // ---- kleine Helfer (alignCenter() gibt es nicht in allen Versionen) ----
+
+    private StringWidget centeredText(int y, Component text) {
+        int tw = this.font.width(text);
+        return new StringWidget((this.width - tw) / 2, y, tw, 9, text, this.font);
+    }
+
+    private void setStatus(String text) {
+        Component c = Component.literal(text);
+        int tw = this.font.width(c);
+        status.setMessage(c);
+        status.setWidth(tw);
+        status.setX((this.width - tw) / 2);
     }
 
     // ---- Auswahl durchschalten ----
@@ -120,7 +133,7 @@ public class MixScreen extends Screen {
 
     private void apply() {
         final Minecraft mc = this.minecraft;
-        status.setMessage(Component.literal("Mische Packs ..."));
+        setStatus("Mische Packs ...");
         CompletableFuture.supplyAsync(() -> {
             try {
                 settings.save(settingsFile);
@@ -131,11 +144,11 @@ public class MixScreen extends Screen {
         }).whenComplete((result, error) -> mc.execute(() -> {
             if (error != null) {
                 Throwable t = error.getCause() != null ? error.getCause() : error;
-                status.setMessage(Component.literal("Fehler: " + t.getMessage()));
+                setStatus("Fehler: " + t.getMessage());
                 return;
             }
             enableAndReload(mc);
-            status.setMessage(Component.literal(result.filesCopied() + " Dateien gemischt und aktiviert."));
+            setStatus(result.filesCopied() + " Dateien gemischt und aktiviert.");
         }));
     }
 
@@ -156,6 +169,6 @@ public class MixScreen extends Screen {
 
     @Override
     public void onClose() {
-        this.minecraft.setScreen(parent);
+        Compat.openScreen(this.minecraft, parent);
     }
 }

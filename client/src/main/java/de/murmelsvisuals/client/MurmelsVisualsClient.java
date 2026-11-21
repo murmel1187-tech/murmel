@@ -9,7 +9,8 @@ public class MurmelsVisualsClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        Compat.registerCommand("murmels", () -> openRequested = true);
+        Compat.registerCommand("murmelsvisuals", () -> openRequested = true);
+        Compat.registerCommand("murmels", () -> openRequested = true); // Kurzform
         Compat.registerOpenKey();
 
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {

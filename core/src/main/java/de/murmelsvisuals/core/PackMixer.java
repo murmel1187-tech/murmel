@@ -22,11 +22,12 @@ public final class PackMixer {
     public record Result(int filesCopied, Path outputDir, List<String> warnings) {}
 
     /**
-     * @param resourcepacksDir  Ordner mit deinen Packs
+     * @param resourcepacksDir  Minecraft-Ordner resourcepacks (hier entsteht das gemischte Pack)
+     * @param packDirs          alle Ordner, aus denen Packs gelesen werden
      * @param settings          Auswahl pro Kategorie
      * @param packFormat        Resource-Pack-Format der laufenden Version (1.21.11 = 75, 26.3 = 97)
      */
-    public static Result build(Path resourcepacksDir, MixSettings settings, int packFormat) throws IOException {
+    public static Result build(Path resourcepacksDir, List<Path> packDirs, MixSettings settings, int packFormat) throws IOException {
         Path out = resourcepacksDir.resolve(PackScanner.OUTPUT_NAME).normalize();
         prepareOutput(out);
 
@@ -39,7 +40,7 @@ public final class PackMixer {
 
         int copied = 0;
         for (String packId : needed) {
-            try (PackSource pack = PackScanner.open(resourcepacksDir, packId)) {
+            try (PackSource pack = PackScanner.open(packDirs, packId)) {
                 for (String path : pack.files()) {
                     Category cat = Category.of(path);
                     String wanted = cat == null ? settings.basePack : settings.effectiveSource(cat);
@@ -63,8 +64,8 @@ public final class PackMixer {
         }
         if (settings.sideShield) {
             SideShield.write(out,
-                    SideShield.clean(settings.shieldLeft, "22,-2,-11"),
-                    SideShield.clean(settings.shieldRight, "-22,-2,-11"));
+                    SideShield.clean(settings.shieldLeft, MixSettings.DEFAULT_SHIELD_LEFT),
+                    SideShield.clean(settings.shieldRight, MixSettings.DEFAULT_SHIELD_RIGHT));
         }
 
         String mcmeta = "{\"pack\":{\"description\":\"MurmelsVisuals Mix\","

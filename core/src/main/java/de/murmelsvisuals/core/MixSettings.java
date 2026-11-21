@@ -20,9 +20,11 @@ public final class MixSettings {
     /** Low Fire: 0 = aus, 1 = mittel, 2 = niedrig. */
     public int lowFire = 0;
     public boolean sideShield = false;
-    /** Verschiebung des Schilds beim Blocken (x,y,z), bei Bedarf in der Config anpassen. */
-    public String shieldLeft = "22,-2,-11";
-    public String shieldRight = "-22,-2,-11";
+    /** Position des Schilds beim Blocken (x,y,z), bei Bedarf in der Config anpassen. */
+    public static final String DEFAULT_SHIELD_LEFT = "10.5,-3.6,-10";
+    public static final String DEFAULT_SHIELD_RIGHT = "-10.5,-2,-10";
+    public String shieldLeft = DEFAULT_SHIELD_LEFT;
+    public String shieldRight = DEFAULT_SHIELD_RIGHT;
     public final Map<Category, String> choices = new EnumMap<>(Category.class);
 
     public String choiceFor(Category c) {
@@ -51,8 +53,8 @@ public final class MixSettings {
         try { s.lowFire = Math.max(0, Math.min(2, Integer.parseInt(p.getProperty("lowFire", "0").trim()))); }
         catch (NumberFormatException e) { s.lowFire = 0; }
         s.sideShield = Boolean.parseBoolean(p.getProperty("sideShield", "false").trim());
-        s.shieldLeft = p.getProperty("shield.left", s.shieldLeft);
-        s.shieldRight = p.getProperty("shield.right", s.shieldRight);
+        s.shieldLeft = p.getProperty("sideShield.left", s.shieldLeft);
+        s.shieldRight = p.getProperty("sideShield.right", s.shieldRight);
         for (Category c : Category.values()) {
             String v = p.getProperty("cat." + c.id());
             if (v != null && !v.isEmpty()) s.choices.put(c, v);
@@ -65,8 +67,8 @@ public final class MixSettings {
         p.setProperty("base", basePack == null ? "" : basePack);
         p.setProperty("lowFire", Integer.toString(lowFire));
         p.setProperty("sideShield", Boolean.toString(sideShield));
-        p.setProperty("shield.left", shieldLeft);
-        p.setProperty("shield.right", shieldRight);
+        p.setProperty("sideShield.left", shieldLeft);
+        p.setProperty("sideShield.right", shieldRight);
         for (Map.Entry<Category, String> e : choices.entrySet()) {
             if (!e.getValue().isEmpty()) p.setProperty("cat." + e.getKey().id(), e.getValue());
         }

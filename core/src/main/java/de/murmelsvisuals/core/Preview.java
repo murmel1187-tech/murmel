@@ -37,8 +37,56 @@ public final class Preview {
         FILES.put(Category.SKY, new String[] {"environment/sun.png"});
     }
 
+    /** Kategorien, die als Gegenstand gezeigt werden und deshalb einen 3D-Look (Tiefe) bekommen. */
+    static boolean isItemLike(Category c) {
+        switch (c) {
+            case CRYSTAL: case TOTEM: case SWORDS: case AXES: case TOOLS: case BOWS: case ARMOR:
+            case SHIELD: case POTIONS: case GAPPLE: case PEARL: case ITEMS:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     /** ARGB-Pixel (res*res, zeilenweise) oder null, wenn das Pack dafür kein Bild hat. */
     public static int[] load(PackSource pack, Category cat, int res) {
+        int depth = isItemLike(cat) && res >= 10 ? (res >= 16 ? 2 : 1) : 0;
+        int[] flat = loadFlat(pack, cat, res - depth);
+        if (flat == null) return null;
+        return depth == 0 ? flat : extrude(flat, res - depth, res, depth);
+    }
+
+    /**
+     * Pseudo-3D: Das Bild bekommt nach rechts unten eine abgedunkelte "Dicke", wie ein Gegenstand,
+     * der schräg von der Seite gesehen wird.
+     */
+    static int[] extrude(int[] src, int srcRes, int res, int depth) {
+        int[] out = new int[res * res];
+        for (int k = depth; k >= 1; k--) {
+            double shade = 0.62 - 0.12 * (k - 1);
+            for (int y = 0; y < srcRes; y++) {
+                for (int x = 0; x < srcRes; x++) {
+                    int p = src[y * srcRes + x];
+                    if ((p >>> 24) < 100) continue;
+                    int tx = x + k, ty = y + k;
+                    if (tx >= res || ty >= res) continue;
+                    int r = (int) (((p >> 16) & 255) * shade);
+                    int g = (int) (((p >> 8) & 255) * shade);
+                    int b = (int) ((p & 255) * shade);
+                    out[ty * res + tx] = 0xFF000000 | (r << 16) | (g << 8) | b;
+                }
+            }
+        }
+        for (int y = 0; y < srcRes; y++) {
+            for (int x = 0; x < srcRes; x++) {
+                int p = src[y * srcRes + x];
+                if ((p >>> 24) >= 100) out[y * res + x] = p;
+            }
+        }
+        return out;
+    }
+
+    static int[] loadFlat(PackSource pack, Category cat, int res) {
         String[] candidates = FILES.get(cat);
         if (candidates == null) return null;
         for (String rel : candidates) {

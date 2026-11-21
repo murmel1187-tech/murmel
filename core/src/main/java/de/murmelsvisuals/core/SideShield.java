@@ -6,8 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Side Shield: Beim Blocken wird der Schild im Ego-Blick an den Rand geschoben,
- * damit er dir nicht die Sicht versperrt. Die Werte sind Schätzungen und über die Config anpassbar.
+ * Side Shield: Beim Blocken bleibt der Schild im Ego-Blick an seiner Ruheposition am Rand unten,
+ * statt zur Bildmitte hochzukommen, damit er dir nicht die Sicht versperrt.
+ * Die Werte stammen aus funktionierenden PvP-Packs (Ruheposition des Schilds) und sind in der Config anpassbar.
  */
 final class SideShield {
     private SideShield() {}
@@ -18,8 +19,8 @@ final class SideShield {
         String json = "{\n"
             + "  \"parent\": \"minecraft:item/shield\",\n"
             + "  \"display\": {\n"
-            + "    \"firstperson_righthand\": {\"rotation\": [0, 180, -5], \"translation\": [" + right + "], \"scale\": [1.25, 1.25, 1.25]},\n"
-            + "    \"firstperson_lefthand\": {\"rotation\": [0, 180, -5], \"translation\": [" + left + "], \"scale\": [1.25, 1.25, 1.25]}\n"
+            + "    \"firstperson_righthand\": {\"rotation\": [0, 180, 5], \"translation\": [" + right + "], \"scale\": [1, 1, 1]},\n"
+            + "    \"firstperson_lefthand\": {\"rotation\": [0, 180, 5], \"translation\": [" + left + "], \"scale\": [1, 1, 1]}\n"
             + "  }\n"
             + "}\n";
         Files.writeString(dir.resolve("shield_blocking.json"), json, StandardCharsets.UTF_8);

@@ -31,9 +31,11 @@ final class PanelPainter {
      */
     static void paintImage(PixelDraw d, Fill f) {
         PixelImage im = d.img;
-        int s = Math.max(1, Math.min(d.w / im.w, d.h / im.h));
-        int ox = d.x + (d.w - im.w * s) / 2;
-        int oy = d.y + (d.h - im.h * s) / 2;
+        double s = Math.min((double) d.w / im.w, (double) d.h / im.h);
+        if (s >= 1 && Math.abs(s - Math.round(s)) < 0.05) s = Math.round(s); // whole numbers stay perfectly crisp
+        final double sc = s;
+        final double ox = d.x + (d.w - im.w * sc) / 2.0;
+        final double oy = d.y + (d.h - im.h * sc) / 2.0;
         List<int[]> open = new java.util.ArrayList<>(); // {fromColumn, toColumn, argb, startRow}
         for (int r = 0; r <= im.h; r++) {
             List<int[]> now = new java.util.ArrayList<>();
@@ -60,7 +62,8 @@ final class PanelPainter {
                         break;
                     }
                 }
-                if (!continued) f.fill(ox + o[0] * s, oy + o[3] * s, ox + o[1] * s, oy + r * s, o[2]);
+                if (!continued) f.fill((int) Math.round(ox + o[0] * sc), (int) Math.round(oy + o[3] * sc),
+                            (int) Math.round(ox + o[1] * sc), (int) Math.round(oy + r * sc), o[2]);
             }
             open = now;
         }

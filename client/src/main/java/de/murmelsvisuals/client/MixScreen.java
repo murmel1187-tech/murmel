@@ -7,6 +7,7 @@ import de.murmelsvisuals.core.PackScanner;
 import de.murmelsvisuals.core.PackSource;
 import de.murmelsvisuals.core.PixelImage;
 import de.murmelsvisuals.core.Preview;
+import de.murmelsvisuals.core.VanillaPackSource;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
@@ -206,16 +207,18 @@ public class MixScreen extends PanelScreen {
             Compat.hide(hit);
             addRenderableWidget(hit);
 
-            String previewPack = value.equals(MixSettings.OFF) ? null
-                    : value.equals(MixSettings.INHERIT) ? settings.basePack : value;
-            Object pv = previewPack == null ? null : previewFor(cat, previewPack, box);
+            // "Off" and "Base without a base pack" show the vanilla look
+            String previewPack = value.equals(MixSettings.OFF) ? VanillaPackSource.ID
+                    : value.equals(MixSettings.INHERIT)
+                        ? (settings.basePack != null ? settings.basePack : VanillaPackSource.ID)
+                    : value;
+            Object pv = previewFor(cat, previewPack, box);
 
             if (pv instanceof PixelImage img) {
                 images.add(new PixelDraw(x + 4, y + 4, box, box, img));
             } else {
-                String hint = value.equals(MixSettings.OFF) ? "Vanilla"
-                        : previewPack == null ? "-"
-                        : pv == LOADING ? "..." : "no preview";
+                String hint = pv == LOADING ? "..."
+                        : value.equals(MixSettings.OFF) ? "Vanilla" : "no preview";
                 addRenderableWidget(centerText(x + cellW / 2, y + 4 + box / 2 - 4,
                         Component.literal(this.font.plainSubstrByWidth(hint, cellW - 6)), GREY));
             }
@@ -313,7 +316,7 @@ public class MixScreen extends PanelScreen {
         final Minecraft mc = this.minecraft;
         PREVIEW_POOL.execute(() -> {
             Object result = NONE;
-            try (PackSource src = PackScanner.open(packDirs, packId)) {
+            try (PackSource src = openSource(packId)) {
                 PixelImage img = Preview.image(src, cat, box);
                 if (img != null) result = img;
             } catch (Exception ignored) {
@@ -328,6 +331,16 @@ public class MixScreen extends PanelScreen {
             }
         });
         return LOADING;
+    }
+
+    /** A broken or empty pack falls back to the vanilla look. */
+    private PackSource openSource(String packId) {
+        if (VanillaPackSource.ID.equals(packId)) return new VanillaPackSource();
+        try {
+            return PackScanner.open(packDirs, packId);
+        } catch (Exception unreadable) {
+            return new VanillaPackSource();
+        }
     }
 
     /** Base pack: none -> pack 1 -> pack 2 -> ... -> none */

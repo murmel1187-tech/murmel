@@ -43,7 +43,16 @@ public final class Preview {
      * @return the picture, or null if the pack has nothing for this category
      */
     public static PixelImage image(PackSource pack, Category cat, int box) {
-        int r = Math.max(16, (box / 2) & ~1);
+        PixelImage img = imageFrom(pack, cat, box);
+        // the pack has nothing custom for this category -> show the vanilla look instead of an empty field
+        if (img == null && !(pack instanceof VanillaPackSource)) {
+            img = imageFrom(new VanillaPackSource(), cat, box);
+        }
+        return img;
+    }
+
+    private static PixelImage imageFrom(PackSource pack, Category cat, int box) {
+        int r = Math.max(16, (box * 5 / 8) & ~1);
         if (cat == Category.GLINT) return glint(pack, r);
         PixelImage img = ModelPreview.render(pack, cat, r);
         if (img != null) return img;

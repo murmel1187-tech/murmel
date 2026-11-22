@@ -48,6 +48,10 @@ final class ModelPreview {
     static PixelImage render(PackSource pack, Category cat, int size) {
         try {
             if (cat == Category.BLOCKS) return renderBlock(pack, "block/obsidian", size);
+            if (cat == Category.CRYSTAL) {
+                PixelImage crystal = renderCrystal(pack, size);
+                if (crystal != null) return crystal;
+            }
             String[] names = ITEMS.get(cat);
             if (names == null) return null;
             for (String name : names) {
@@ -271,20 +275,179 @@ final class ModelPreview {
             }
         }
         if (quads.isEmpty()) return null;
+        return rasterize(quads, size);
+    }
 
-        double[] zbuf = new double[size * size];
+    private static final int SS = 3; // every pixel is calculated 3x3 times and averaged -> smooth edges, no noise
+
+    /**
+     * Paints the quads into a size x size picture. Solid texels first (depth test), then glass-like texels from
+     * back to front. The result is averaged down from a 3x bigger picture and slightly reduced in colours,
+     * so the menu needs far fewer rectangles to draw it.
+     */
+    private static PixelImage rasterize(List<Quad> quads, int size) {
+        int big = size * SS;
+        double[] zbuf = new double[big * big];
         Arrays.fill(zbuf, -1e9);
+        int[] hi = new int[big * big];
+        for (Quad q : quads) {
+            tri(q, 0, 1, 2, big, zbuf, hi, 0);
+            tri(q, 0, 2, 3, big, zbuf, hi, 0);
+        }
+        List<Quad> glass = new ArrayList<>(quads);
+        glass.sort((x, y) -> Double.compare(avgZ(x), avgZ(y))); // farthest first
+        for (Quad q : glass) {
+            tri(q, 0, 1, 2, big, zbuf, hi, 1);
+            tri(q, 0, 2, 3, big, zbuf, hi, 1);
+        }
+
         int[] out = new int[size * size];
-        for (int pass = 0; pass < 2; pass++) {
-            for (Quad q : quads) {
-                tri(q, 0, 1, 2, size, zbuf, out, pass);
-                tri(q, 0, 2, 3, size, zbuf, out, pass);
+        boolean any = false;
+        for (int y = 0; y < size; y++) {
+            for (int x = 0; x < size; x++) {
+                long a = 0, r = 0, g = 0, b = 0;
+                for (int sy = 0; sy < SS; sy++) {
+                    for (int sx = 0; sx < SS; sx++) {
+                        int p = hi[(y * SS + sy) * big + x * SS + sx];
+                        int pa = p >>> 24;
+                        a += pa;
+                        r += (long) ((p >> 16) & 255) * pa;
+                        g += (long) ((p >> 8) & 255) * pa;
+                        b += (long) (p & 255) * pa;
+                    }
+                }
+                if (a == 0) continue;
+                int na = (int) (a / (SS * SS));
+                na = na >= 224 ? 255 : (na + 16) & 0xE0;
+                if (na < 32) continue;
+                int nr = (int) (r / a) & 0xF8, ng = (int) (g / a) & 0xF8, nb = (int) (b / a) & 0xF8;
+                out[y * size + x] = (na << 24) | (nr << 16) | (ng << 8) | nb;
+                any = true;
             }
         }
-        for (int px : out) {
-            if ((px >>> 24) != 0) return new PixelImage(size, size, out);
+        return any ? new PixelImage(size, size, out) : null;
+    }
+
+    private static double avgZ(Quad q) {
+        return (q.p[0][2] + q.p[1][2] + q.p[2][2] + q.p[3][2]) / 4;
+    }
+
+    // ------------------------------------------------------------------ the end crystal as it looks in the world
+
+    private static final double SIN45 = Math.sin(Math.PI / 4);
+
+    /**
+     * Rebuilds Minecraft's end crystal entity: three nested cubes (outer glass, inner glass, core), each one
+     * tilted 60 degrees around a diagonal axis. The cubes use the pack's entity texture.
+     */
+    static PixelImage renderCrystal(PackSource pack, int size) {
+        BufferedImage tex = new Textures(pack).byPath("assets/minecraft/textures/entity/end_crystal/end_crystal.png");
+        if (tex == null) return null;
+
+        double spin = 38;
+        double[][] tilt = axisAngle(new double[] {SIN45, 0, SIN45}, 60);
+        double[][] m = mul(rotYm(spin), tilt);
+        double[][][] mats = new double[3][][];
+        mats[0] = m;
+        double[][] inner = mul(mul(m, scale(0.875)), mul(tilt, rotYm(spin)));
+        mats[1] = inner;
+        mats[2] = mul(mul(inner, scale(0.875)), mul(tilt, rotYm(spin)));
+        int[][] texOffs = {{0, 0}, {0, 0}, {32, 0}}; // outer glass, inner glass, core (in the 64 x 32 layout)
+
+        double[][] view = mul(rotXm(24), rotYm(-28)); // look at it from slightly above and the side
+        List<Quad> quads = new ArrayList<>();
+        double minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+        for (int c = 0; c < 3; c++) {
+            double[][] full = mul(view, mats[c]);
+            for (String dir : DIRS) {
+                double[] uv = boxUv(dir, texOffs[c][0], texOffs[c][1], 8, 8, 8);
+                double[][] verts = faceVerts(dir, new double[] {-4, -4, -4}, new double[] {4, 4, 4});
+                double[] corners = {uv[0], uv[1], uv[2], uv[3]};
+                Quad q = new Quad();
+                q.tex = tex;
+                double[][] cs = {{corners[0], corners[1]}, {corners[0], corners[3]}, {corners[2], corners[3]}, {corners[2], corners[1]}};
+                for (int i = 0; i < 4; i++) {
+                    q.uv[i] = cs[i];
+                    q.p[i] = apply(full, new double[] {verts[i][0] / 16, verts[i][1] / 16, verts[i][2] / 16});
+                    minX = Math.min(minX, q.p[i][0]); maxX = Math.max(maxX, q.p[i][0]);
+                    minY = Math.min(minY, q.p[i][1]); maxY = Math.max(maxY, q.p[i][1]);
+                }
+                double[] n = cross(sub(q.p[1], q.p[0]), sub(q.p[2], q.p[0]));
+                if (n[2] <= 1e-9 && c != 0) {
+                    // inner parts are seen through the glass; keep their back faces away, front faces stay
+                    continue;
+                }
+                if (n[2] <= 1e-9) continue;
+                double len = Math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+                double dot = (-0.354 * n[0] + 0.809 * n[1] + 0.506 * n[2]) / len;
+                q.shade = 0.8 + 0.2 * Math.max(0, dot);
+                quads.add(q);
+            }
         }
-        return null;
+        if (quads.isEmpty()) return null;
+        // fit into the picture
+        double ext = Math.max(maxX - minX, maxY - minY);
+        double k = 0.92 / ext, cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+        for (Quad q : quads) {
+            for (double[] p : q.p) {
+                p[0] = (p[0] - cx) * k;
+                p[1] = (p[1] - cy) * k;
+                p[2] = p[2] * k;
+            }
+        }
+        return rasterize(quads, size);
+    }
+
+    /** UV rectangle (in the 0..16 unit system) of one face of a vanilla "box" model part. */
+    private static double[] boxUv(String dir, int u0, int v0, int w, int h, int d) {
+        double ua, va, ub, vb;
+        switch (dir) {
+            case "up":    ua = u0 + d;         va = v0;     ub = u0 + d + w;         vb = v0 + d;     break;
+            case "down":  ua = u0 + d + w;     va = v0;     ub = u0 + d + 2 * w;     vb = v0 + d;     break;
+            case "west":  ua = u0;             va = v0 + d; ub = u0 + d;             vb = v0 + d + h; break;
+            case "north": ua = u0 + d;         va = v0 + d; ub = u0 + d + w;         vb = v0 + d + h; break;
+            case "east":  ua = u0 + d + w;     va = v0 + d; ub = u0 + 2 * d + w;     vb = v0 + d + h; break;
+            default:      ua = u0 + 2 * d + w; va = v0 + d; ub = u0 + 2 * d + 2 * w; vb = v0 + d + h; break;
+        }
+        return new double[] {ua / 64 * 16, va / 32 * 16, ub / 64 * 16, vb / 32 * 16};
+    }
+
+    // small 3x3 matrix helpers
+    private static double[][] mul(double[][] a, double[][] b) {
+        double[][] r = new double[3][3];
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) for (int k = 0; k < 3; k++) r[i][j] += a[i][k] * b[k][j];
+        return r;
+    }
+
+    private static double[][] scale(double s) {
+        return new double[][] {{s, 0, 0}, {0, s, 0}, {0, 0, s}};
+    }
+
+    private static double[][] rotXm(double deg) {
+        double c = Math.cos(Math.toRadians(deg)), s = Math.sin(Math.toRadians(deg));
+        return new double[][] {{1, 0, 0}, {0, c, -s}, {0, s, c}};
+    }
+
+    private static double[][] rotYm(double deg) {
+        double c = Math.cos(Math.toRadians(deg)), s = Math.sin(Math.toRadians(deg));
+        return new double[][] {{c, 0, s}, {0, 1, 0}, {-s, 0, c}};
+    }
+
+    private static double[][] axisAngle(double[] ax, double deg) {
+        double len = Math.sqrt(ax[0] * ax[0] + ax[1] * ax[1] + ax[2] * ax[2]);
+        double x = ax[0] / len, y = ax[1] / len, z = ax[2] / len;
+        double c = Math.cos(Math.toRadians(deg)), s = Math.sin(Math.toRadians(deg)), t = 1 - c;
+        return new double[][] {
+            {t * x * x + c,     t * x * y - s * z, t * x * z + s * y},
+            {t * x * y + s * z, t * y * y + c,     t * y * z - s * x},
+            {t * x * z - s * y, t * y * z + s * x, t * z * z + c}};
+    }
+
+    private static double[] apply(double[][] m, double[] v) {
+        return new double[] {
+            m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
+            m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
+            m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2]};
     }
 
     private static double[][] faceVerts(String dir, double[] f, double[] t) {

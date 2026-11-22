@@ -5,6 +5,7 @@ import de.murmelsvisuals.core.MixSettings;
 import de.murmelsvisuals.core.PackMixer;
 import de.murmelsvisuals.core.PackScanner;
 import de.murmelsvisuals.core.PackSource;
+import de.murmelsvisuals.core.PixelImage;
 import de.murmelsvisuals.core.Preview;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -12,7 +13,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.server.packs.repository.PackRepository;
 
@@ -20,14 +20,23 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MixScreen extends PanelScreen {
-    private static final int LINE_H = 9;
-    private static final String BLOCK = "\u2588";
+    private static final Object LOADING = new Object();
+    private static final Object NONE = new Object();
+    /** One background thread loads the preview pictures, so the menu never freezes. */
+    private static final ExecutorService PREVIEW_POOL = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "MurmelsVisuals-previews");
+        t.setDaemon(true);
+        return t;
+    });
     private static final int WHITE = 0xFFFFFF;
     private static final int GREY = 0x8A8A9A;
     private static final int VIOLET = 0xC9A8FF;
@@ -50,7 +59,9 @@ public class MixScreen extends PanelScreen {
     private int catIndex = 0;
     private int catScroll = 0;
     private int rowScroll = 0;
-    private final Map<String, int[]> previewCache = new HashMap<>();
+    private final Map<String, Object> previewCache = new ConcurrentHashMap<>();
+    private final AtomicBoolean rebuildQueued = new AtomicBoolean(false);
+    private volatile boolean active = true;
 
     public MixScreen(Screen parent) {
         super(Component.literal("Pack Mixer"));
@@ -62,6 +73,7 @@ public class MixScreen extends PanelScreen {
     @Override
     protected void init() {
         panels.clear();
+        images.clear();
         this.dim = settings.dim;
         try {
             Files.createDirectories(extraDir);
@@ -159,19 +171,16 @@ public class MixScreen extends PanelScreen {
 
         int top = 64;
         int bottom = this.height - 48;
-        int blockW = Math.max(1, this.font.width(BLOCK));
-        int cpp = Math.max(1, Math.round(9f / blockW));
-        int pxW = cpp * blockW;
-
-        // largest preview that still shows at least 6 cells at once
-        int res = 6, cols = 1, rows = 1, cellW = 0, cellH = 0;
-        for (int r = 20; r >= 6; r--) {
-            int cw = r * pxW + 8;
-            int ch = r * LINE_H + 8 + 12;
+        // biggest picture box (a multiple of 16 pixels, so 16x16 textures stay crisp) that still shows 12 cells
+        int box = 48, cols = 1, rows = 1, cellW = 0, cellH = 0;
+        for (int sc = 8; sc >= 3; sc--) {
+            int bx = 16 * sc;
+            int cw = bx + 8;
+            int ch = bx + 8 + 12;
             int c = Math.max(1, (gw + 4) / (cw + 4));
             int rw = Math.max(1, (bottom - top + 4) / (ch + 4));
-            res = r; cols = c; rows = rw; cellW = cw; cellH = ch;
-            if (c * rw >= 6) break;
+            box = bx; cols = c; rows = rw; cellW = cw; cellH = ch;
+            if (c * rw >= 12) break;
         }
         int totalRows = Math.max(1, (options.size() + cols - 1) / cols);
         int maxRowScroll = Math.max(0, totalRows - rows);
@@ -199,24 +208,15 @@ public class MixScreen extends PanelScreen {
 
             String previewPack = value.equals(MixSettings.OFF) ? null
                     : value.equals(MixSettings.INHERIT) ? settings.basePack : value;
-            int[] px = previewPack == null ? null : preview(cat, previewPack, res);
+            Object pv = previewPack == null ? null : previewFor(cat, previewPack, box);
 
-            if (px != null) {
-                for (int r = 0; r < res; r++) {
-                    MutableComponent row = Component.empty();
-                    for (int c = 0; c < res; c++) {
-                        int p = px[r * res + c];
-                        boolean solid = (p >>> 24) >= 100;
-                        int rgb = solid ? (p & 0xFFFFFF) : 0x1B1B2C;
-                        row.append(Component.literal(BLOCK.repeat(cpp)).withStyle(Style.EMPTY.withColor(rgb)));
-                    }
-                    addRenderableWidget(new StringWidget(x + (cellW - res * pxW) / 2, y + 4 + r * LINE_H,
-                            res * pxW, LINE_H, row, this.font));
-                }
+            if (pv instanceof PixelImage img) {
+                images.add(new PixelDraw(x + 4, y + 4, box, box, img));
             } else {
                 String hint = value.equals(MixSettings.OFF) ? "Vanilla"
-                        : (previewPack == null ? "-" : "no preview");
-                addRenderableWidget(centerText(x + cellW / 2, y + cellH / 2 - 8,
+                        : previewPack == null ? "-"
+                        : pv == LOADING ? "..." : "no preview";
+                addRenderableWidget(centerText(x + cellW / 2, y + 4 + box / 2 - 4,
                         Component.literal(this.font.plainSubstrByWidth(hint, cellW - 6)), GREY));
             }
 
@@ -242,7 +242,10 @@ public class MixScreen extends PanelScreen {
         status = centerText(centerX, this.height - 38, Component.literal(
                 statusText != null ? statusText
                 : packs.isEmpty() ? "No packs found: put ZIPs into .minecraft/murmelspacks (use Open Folder)"
-                : "Row " + (rowScroll + 1) + " of " + totalRows + "  -  mouse wheel to scroll"), GREY);
+                : cat.label() + ": " + (current.equals(MixSettings.INHERIT)
+                        ? (settings.basePack == null ? "Base (none)" : "Base = " + shortName(settings.basePack))
+                        : current.equals(MixSettings.OFF) ? "Off (vanilla)" : shortName(current))
+                  + "   -   row " + (rowScroll + 1) + "/" + totalRows + ", mouse wheel scrolls"), GREY);
         addRenderableWidget(status);
 
         // ---- bottom row: Dim | Open Folder | Apply | Done
@@ -301,17 +304,30 @@ public class MixScreen extends PanelScreen {
         status.setX(centerX - tw / 2);
     }
 
-    private int[] preview(Category cat, String packId, int res) {
-        String key = cat.id() + "|" + packId + "|" + res;
-        if (previewCache.containsKey(key)) return previewCache.get(key);
-        int[] px = null;
-        try (PackSource src = PackScanner.open(packDirs, packId)) {
-            px = Preview.load(src, cat, res);
-        } catch (Exception ignored) {
-            // pack unreadable -> no preview
-        }
-        previewCache.put(key, px);
-        return px;
+    /** Returns the picture, LOADING (a background load was started) or NONE (the pack has nothing for this). */
+    private Object previewFor(Category cat, String packId, int box) {
+        String key = cat.id() + "|" + packId + "|" + box;
+        Object v = previewCache.get(key);
+        if (v != null) return v;
+        previewCache.put(key, LOADING);
+        final Minecraft mc = this.minecraft;
+        PREVIEW_POOL.execute(() -> {
+            Object result = NONE;
+            try (PackSource src = PackScanner.open(packDirs, packId)) {
+                PixelImage img = Preview.image(src, cat, box);
+                if (img != null) result = img;
+            } catch (Exception ignored) {
+                // pack unreadable -> no preview
+            }
+            previewCache.put(key, result);
+            if (active && rebuildQueued.compareAndSet(false, true)) {
+                mc.execute(() -> {
+                    rebuildQueued.set(false);
+                    if (active) rebuildWidgets();
+                });
+            }
+        });
+        return LOADING;
     }
 
     /** Base pack: none -> pack 1 -> pack 2 -> ... -> none */
@@ -383,6 +399,7 @@ public class MixScreen extends PanelScreen {
 
     @Override
     public void onClose() {
+        active = false;
         Compat.openScreen(this.minecraft, parent);
     }
 }

@@ -1,5 +1,7 @@
 package de.murmelsvisuals.client;
 
+import de.murmelsvisuals.core.PixelImage;
+
 import java.util.List;
 
 /**
@@ -15,10 +17,53 @@ final class PanelPainter {
 
     private static final int[] VEIL = {0x00000000, 0x48000000, 0xA0000000};
 
-    static void paintAll(List<Panel> panels, int mouseX, int mouseY, int dim, int width, int height, Fill f) {
+    static void paintAll(List<Panel> panels, List<PixelDraw> images, int mouseX, int mouseY, int dim,
+                         int width, int height, Fill f) {
         int veil = VEIL[Math.max(0, Math.min(2, dim))];
         if ((veil >>> 24) != 0) f.fill(0, 0, width, height, veil);
         for (Panel p : panels) paint(p, mouseX, mouseY, f);
+        for (PixelDraw d : images) paintImage(d, f);
+    }
+
+    /**
+     * Draws a picture as filled rectangles. Neighbouring pixels of the same colour are merged into one rectangle
+     * (first sideways, then downwards), so even detailed pictures need far fewer rectangles than pixels.
+     */
+    static void paintImage(PixelDraw d, Fill f) {
+        PixelImage im = d.img;
+        int s = Math.max(1, Math.min(d.w / im.w, d.h / im.h));
+        int ox = d.x + (d.w - im.w * s) / 2;
+        int oy = d.y + (d.h - im.h * s) / 2;
+        List<int[]> open = new java.util.ArrayList<>(); // {fromColumn, toColumn, argb, startRow}
+        for (int r = 0; r <= im.h; r++) {
+            List<int[]> now = new java.util.ArrayList<>();
+            if (r < im.h) {
+                int c = 0;
+                while (c < im.w) {
+                    int p = im.argb[r * im.w + c];
+                    if ((p >>> 24) < 16) { c++; continue; }
+                    int e = c + 1;
+                    while (e < im.w && im.argb[r * im.w + e] == p) e++;
+                    now.add(new int[] {c, e, p, r});
+                    c = e;
+                }
+            }
+            boolean[] used = new boolean[now.size()];
+            for (int[] o : open) {
+                boolean continued = false;
+                for (int k = 0; k < now.size(); k++) {
+                    int[] n = now.get(k);
+                    if (!used[k] && n[0] == o[0] && n[1] == o[1] && n[2] == o[2]) {
+                        used[k] = true;
+                        n[3] = o[3]; // keep the start row
+                        continued = true;
+                        break;
+                    }
+                }
+                if (!continued) f.fill(ox + o[0] * s, oy + o[3] * s, ox + o[1] * s, oy + r * s, o[2]);
+            }
+            open = now;
+        }
     }
 
     static void paint(Panel p, int mx, int my, Fill f) {

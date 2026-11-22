@@ -7,10 +7,11 @@ import java.io.InputStream;
 import java.util.EnumMap;
 import java.util.Map;
 
-/** Lädt ein typisches Bild einer Kategorie aus einem Pack und verkleinert es auf res x res Pixel. */
+/** Builds the preview picture of a category for one pack: a 3D render of the item model, or the plain texture. */
 public final class Preview {
     private Preview() {}
 
+    /** Plain pictures used when a category has no item model (hearts, hotbar, particles, ...). */
     private static final Map<Category, String[]> FILES = new EnumMap<>(Category.class);
 
     static {
@@ -37,88 +38,70 @@ public final class Preview {
         FILES.put(Category.SKY, new String[] {"environment/sun.png"});
     }
 
-    /** Kategorien, die als Gegenstand gezeigt werden und deshalb einen 3D-Look (Tiefe) bekommen. */
-    static boolean isItemLike(Category c) {
-        switch (c) {
-            case CRYSTAL: case TOTEM: case SWORDS: case AXES: case TOOLS: case BOWS: case ARMOR:
-            case SHIELD: case POTIONS: case GAPPLE: case PEARL: case ITEMS:
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    /** ARGB-Pixel (res*res, zeilenweise) oder null, wenn das Pack dafür kein Bild hat. */
-    public static int[] load(PackSource pack, Category cat, int res) {
-        int depth = isItemLike(cat) && res >= 10 ? (res >= 16 ? 2 : 1) : 0;
-        int[] flat = loadFlat(pack, cat, res - depth);
-        if (flat == null) return null;
-        return depth == 0 ? flat : extrude(flat, res - depth, res, depth);
-    }
-
     /**
-     * Pseudo-3D: Das Bild bekommt nach rechts unten eine abgedunkelte "Dicke", wie ein Gegenstand,
-     * der schräg von der Seite gesehen wird.
+     * @param box side length (in screen pixels) of the area the picture will be shown in
+     * @return the picture, or null if the pack has nothing for this category
      */
-    static int[] extrude(int[] src, int srcRes, int res, int depth) {
-        int[] out = new int[res * res];
-        for (int k = depth; k >= 1; k--) {
-            double shade = 0.62 - 0.12 * (k - 1);
-            for (int y = 0; y < srcRes; y++) {
-                for (int x = 0; x < srcRes; x++) {
-                    int p = src[y * srcRes + x];
-                    if ((p >>> 24) < 100) continue;
-                    int tx = x + k, ty = y + k;
-                    if (tx >= res || ty >= res) continue;
-                    int r = (int) (((p >> 16) & 255) * shade);
-                    int g = (int) (((p >> 8) & 255) * shade);
-                    int b = (int) ((p & 255) * shade);
-                    out[ty * res + tx] = 0xFF000000 | (r << 16) | (g << 8) | b;
-                }
-            }
-        }
-        for (int y = 0; y < srcRes; y++) {
-            for (int x = 0; x < srcRes; x++) {
-                int p = src[y * srcRes + x];
-                if ((p >>> 24) >= 100) out[y * res + x] = p;
-            }
-        }
-        return out;
+    public static PixelImage image(PackSource pack, Category cat, int box) {
+        int r = Math.max(16, (box / 2) & ~1);
+        if (cat == Category.GLINT) return glint(pack, r);
+        PixelImage img = ModelPreview.render(pack, cat, r);
+        if (img != null) return img;
+        return sprite(pack, cat, r);
     }
 
-    static int[] loadFlat(PackSource pack, Category cat, int res) {
-        String[] candidates = FILES.get(cat);
-        if (candidates == null) return null;
-        for (String rel : candidates) {
+    /** The glint texture is grey; Minecraft tints it purple, so the preview does the same. */
+    private static PixelImage glint(PackSource pack, int maxDim) {
+        String[] files = {"misc/enchanted_glint_item.png", "misc/enchanted_item_glint.png", "misc/enchanted_glint_entity.png"};
+        for (String rel : files) {
             try (InputStream in = pack.open("assets/minecraft/textures/" + rel)) {
                 BufferedImage img = ImageIO.read(in);
-                if (img != null) return downscale(img, res);
+                if (img == null) continue;
+                PixelImage px = fromImage(img, maxDim);
+                int[] out = new int[px.argb.length];
+                for (int i = 0; i < out.length; i++) {
+                    int p = px.argb[i];
+                    int r = Math.min(255, (int) (((p >> 16) & 255) * 0.9 * 2.2));
+                    int g = Math.min(255, (int) (((p >> 8) & 255) * 0.45 * 2.2));
+                    int b = Math.min(255, (int) ((p & 255) * 1.44 * 2.2));
+                    out[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
+                }
+                return new PixelImage(px.w, px.h, out);
             } catch (IOException | RuntimeException e) {
-                // Datei fehlt oder ist kaputt -> nächster Kandidat
+                // next file
             }
         }
         return null;
     }
 
-    static int[] downscale(BufferedImage img, int res) {
+    static PixelImage sprite(PackSource pack, Category cat, int maxDim) {
+        String[] candidates = FILES.get(cat);
+        if (candidates == null) return null;
+        for (String rel : candidates) {
+            try (InputStream in = pack.open("assets/minecraft/textures/" + rel)) {
+                BufferedImage img = ImageIO.read(in);
+                if (img != null) return fromImage(img, maxDim);
+            } catch (IOException | RuntimeException e) {
+                // missing or broken -> next candidate
+            }
+        }
+        return null;
+    }
+
+    /** Converts a texture to a PixelImage: first frame of animations, long bars cut, big images shrunk. */
+    static PixelImage fromImage(BufferedImage img, int maxDim) {
         int w = img.getWidth();
         int h = img.getHeight();
-        if (h > w && h % w == 0) h = w;   // animierte Texturen (Streifen) -> nur das erste Bild
-        if (w > 3 * h) w = 3 * h;         // sehr breite Leisten -> nur der linke Teil
-
-        // Seitenverhältnis behalten, in der Mitte des res x res Felds platzieren
-        int dw, dh;
-        if (w >= h) {
-            dw = res;
-            dh = Math.max(1, Math.round((float) res * h / w));
-        } else {
-            dh = res;
-            dw = Math.max(1, Math.round((float) res * w / h));
+        if (h > w && h % w == 0) h = w;   // animated strip -> first frame only
+        if (w > 3 * h) w = 3 * h;         // very wide bars -> left part only
+        int dw = w, dh = h;
+        int longest = Math.max(w, h);
+        if (longest > maxDim) {
+            double f = (double) maxDim / longest;
+            dw = Math.max(1, (int) Math.round(w * f));
+            dh = Math.max(1, (int) Math.round(h * f));
         }
-        int ox = (res - dw) / 2;
-        int oy = (res - dh) / 2;
-
-        int[] out = new int[res * res]; // 0 = transparent
+        int[] out = new int[dw * dh];
         for (int dy = 0; dy < dh; dy++) {
             for (int dx = 0; dx < dw; dx++) {
                 int x0 = dx * w / dw, x1 = Math.max(x0 + 1, (dx + 1) * w / dw);
@@ -127,21 +110,21 @@ public final class Preview {
                 int n = 0;
                 for (int y = y0; y < y1 && y < h; y++) {
                     for (int x = x0; x < x1 && x < w; x++) {
-                        int px = img.getRGB(x, y);
-                        int pa = px >>> 24;
+                        int p = img.getRGB(x, y);
+                        int pa = p >>> 24;
                         a += pa;
-                        r += (long) ((px >> 16) & 0xFF) * pa;
-                        g += (long) ((px >> 8) & 0xFF) * pa;
-                        b += (long) (px & 0xFF) * pa;
+                        r += (long) ((p >> 16) & 0xFF) * pa;
+                        g += (long) ((p >> 8) & 0xFF) * pa;
+                        b += (long) (p & 0xFF) * pa;
                         n++;
                     }
                 }
                 if (n > 0 && a > 0) {
                     int ia = (int) (a / n);
-                    out[(oy + dy) * res + ox + dx] = (ia << 24) | ((int) (r / a) << 16) | ((int) (g / a) << 8) | (int) (b / a);
+                    out[dy * dw + dx] = (ia << 24) | ((int) (r / a) << 16) | ((int) (g / a) << 8) | (int) (b / a);
                 }
             }
         }
-        return out;
+        return new PixelImage(dw, dh, out);
     }
 }

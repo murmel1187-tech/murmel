@@ -53,6 +53,8 @@ public enum Category {
     EXP("XP Bar", Pat.of(
         "assets/[^/]+/textures/gui/sprites/hud/experience_[a-z_]+\\.png(\\.mcmeta)?",
         "assets/[^/]+/textures/gui/sprites/hud/jump_bar_[a-z_]+\\.png(\\.mcmeta)?")),
+    GLINT("Enchant Glint", Pat.of(
+        "assets/[^/]+/textures/misc/enchanted_[a-z_]*glint[a-z_]*\\.png(\\.mcmeta)?")),
     GUI("GUI & Menus", Pat.join(
         Pat.dir("assets/[^/]+/textures/gui"),
         Pat.dir("assets/[^/]+/textures/misc"))),

@@ -25,14 +25,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-public class MixScreen extends Screen {
+public class MixScreen extends PanelScreen {
     private static final int LINE_H = 9;
     private static final String BLOCK = "\u2588";
+    private static final int WHITE = 0xFFFFFF;
+    private static final int GREY = 0x8A8A9A;
+    private static final int VIOLET = 0xC9A8FF;
+    private static final int PINK = 0xF9A8D4;
 
     private final Screen parent;
     private final Path gameDir = FabricLoader.getInstance().getGameDir();
     private final Path packsDir = gameDir.resolve("resourcepacks");
-    /** Eigener Ordner nur für diese Mod: Packs hier tauchen nicht in Minecrafts normaler Pack-Liste auf. */
+    /** Own folder for this mod: packs placed here do not show up in the normal Minecraft pack list. */
     private final Path extraDir = gameDir.resolve("murmelspacks");
     private final List<Path> packDirs = List.of(packsDir, extraDir);
     private final Path settingsFile = FabricLoader.getInstance().getConfigDir().resolve("murmelsvisuals.properties");
@@ -40,27 +44,29 @@ public class MixScreen extends Screen {
 
     private List<String> packs = List.of();
     private StringWidget status;
-    private String statusText = null; // null = Standardtext
-    private int centerX = 0;          // Mitte des Gitterbereichs (für den Status)
+    private String statusText = null; // null = default text
+    private int centerX = 0;
     private int sidebarW = 120;
     private int catIndex = 0;
-    private int catScroll = 0;        // Scrollposition der Kategorie-Liste links
-    private int rowScroll = 0;        // Scrollposition des Pack-Gitters (in Zeilen)
+    private int catScroll = 0;
+    private int rowScroll = 0;
     private final Map<String, int[]> previewCache = new HashMap<>();
 
     public MixScreen(Screen parent) {
-        super(Component.literal("Pack-Mixer"));
+        super(Component.literal("Pack Mixer"));
         this.parent = parent;
     }
 
-    // ------------------------------------------------------------------ Aufbau
+    // ------------------------------------------------------------------ layout
 
     @Override
     protected void init() {
+        panels.clear();
+        this.dim = settings.dim;
         try {
             Files.createDirectories(extraDir);
         } catch (IOException ignored) {
-            // nicht schlimm, dann gibt es den Zusatzordner eben nicht
+            // fine, the extra folder just will not exist
         }
         try {
             packs = PackScanner.listPackIds(packDirs);
@@ -68,100 +74,96 @@ public class MixScreen extends Screen {
             packs = List.of();
         }
 
-        if (settings.clearBackground) MenuBlur.disable(this.minecraft.options); // Hintergrund klar statt unscharf
-
         final Category[] cats = Category.values();
         final Category cat = cats[catIndex];
 
         sidebarW = Math.max(90, Math.min(130, this.width / 5));
-        int gx0 = sidebarW + 16;          // Gitterbereich links
-        int gx1 = this.width - 30;        // Gitterbereich rechts (rechts daneben: Scroll-Knöpfe)
+        int gx0 = sidebarW + 16;
+        int gx1 = this.width - 30;
         int gw = gx1 - gx0;
         centerX = gx0 + gw / 2;
 
-        addRenderableWidget(centerText(centerX, 6, this.title));
+        // glass backgrounds
+        panels.add(new Panel(4, 4, sidebarW + 8, this.height - 8, Panel.GLASS, false));
+        panels.add(new Panel(gx0 - 6, 4, this.width - 4 - (gx0 - 6), this.height - 8, Panel.GLASS, false));
 
-        // ---- Schalter oben: Side Shield | Basis-Pack | Low Fire
+        addRenderableWidget(centerText(centerX, 9, this.title, VIOLET));
+
+        // ---- top row: Side Shield | Base pack | Low Fire
         int bw = (gw - 8) / 3;
-        addRenderableWidget(Button.builder(shieldLabel(), b -> {
+        flat(gx0, 22, bw, 20,
+                "Side Shield: " + (settings.sideShield == 0 ? "Off" : settings.sideShield == 1 ? "Small" : "Normal"),
+                settings.sideShield > 0 ? Panel.ACTIVE : Panel.BUTTON, true, b -> {
             settings.sideShield = (settings.sideShield + 1) % 3;
-            b.setMessage(shieldLabel());
-        }).bounds(gx0, 20, bw, 20).build());
-        addRenderableWidget(Button.builder(baseLabel(bw - 10), b -> {
+            rebuildWidgets();
+        });
+        flat(gx0 + bw + 4, 22, bw, 20,
+                "Base: " + (settings.basePack == null ? "none" : shortName(settings.basePack)),
+                settings.basePack != null ? Panel.ACTIVE : Panel.BUTTON, true, b -> {
             settings.basePack = nextBase(settings.basePack);
             rebuildWidgets();
-        }).bounds(gx0 + bw + 4, 20, bw, 20).build());
-        addRenderableWidget(Button.builder(fireLabel(), b -> {
+        });
+        flat(gx0 + 2 * (bw + 4), 22, bw, 20,
+                "Low Fire: " + (settings.lowFire == 0 ? "Off" : settings.lowFire == 1 ? "Medium" : "Low"),
+                settings.lowFire > 0 ? Panel.ACTIVE : Panel.BUTTON, true, b -> {
             settings.lowFire = (settings.lowFire + 1) % 3;
-            b.setMessage(fireLabel());
-        }).bounds(gx0 + 2 * (bw + 4), 20, bw, 20).build());
+            rebuildWidgets();
+        });
 
-        // ---- Kategorien links am Rand (scrollbar)
-        // Titel oben in der Seitenleiste
-        Component brand = Component.literal("MurmelsVisuals")
-                .withStyle(Style.EMPTY.withBold(true).withColor(0xC9A8FF));
-        if (this.font.width(brand) > sidebarW) {
-            brand = Component.literal("Murmels").withStyle(Style.EMPTY.withBold(true).withColor(0xC9A8FF));
-        }
-        addRenderableWidget(centerText(8 + sidebarW / 2, 10, brand));
-
-        int sTop = 26;
-        int sBottom = this.height - 8;
+        // ---- sidebar with the categories (scrollable)
+        addRenderableWidget(centerText(8 + sidebarW / 2, 11, Component.literal("MurmelsVisuals")
+                .withStyle(Style.EMPTY.withBold(true).withColor(VIOLET)), -1));
+        int sTop = 28;
+        int sBottom = this.height - 10;
         int itemH = 18;
         int step = itemH + 2;
         int fit = Math.max(1, (sBottom - sTop) / step);
         boolean overflow = cats.length > fit;
-        int listFit = overflow ? Math.max(1, fit - 2) : fit; // bei Überlauf zwei Plätze für die Pfeile
+        int listFit = overflow ? Math.max(1, fit - 2) : fit;
         int maxCatScroll = Math.max(0, cats.length - listFit);
         catScroll = Math.max(0, Math.min(catScroll, maxCatScroll));
         int sy = sTop;
         if (overflow) {
-            Button up = Button.builder(Component.literal("^"), b -> {
+            flat(8, sy, sidebarW, itemH, "^", Panel.BUTTON, catScroll > 0, b -> {
                 catScroll = Math.max(0, catScroll - 3);
                 rebuildWidgets();
-            }).bounds(8, sy, sidebarW, itemH).build();
-            up.active = catScroll > 0;
-            addRenderableWidget(up);
+            });
             sy += step;
         }
         for (int i = catScroll; i < Math.min(cats.length, catScroll + listFit); i++) {
             final int idx = i;
-            Button cb = Button.builder(
-                    Component.literal(this.font.plainSubstrByWidth(cats[i].label(), sidebarW - 10)), b -> {
+            flat(8, sy, sidebarW, itemH, cats[i].label(), i == catIndex ? Panel.TAB_ACTIVE : Panel.BUTTON, true, b -> {
                 catIndex = idx;
                 rowScroll = 0;
                 rebuildWidgets();
-            }).bounds(8, sy, sidebarW, itemH).build();
-            cb.active = i != catIndex; // gewählte Kategorie ist ausgegraut
-            addRenderableWidget(cb);
+            });
             sy += step;
         }
         if (overflow) {
-            Button down = Button.builder(Component.literal("v"), b -> {
-                catScroll = Math.min(maxCatScroll, catScroll + 3);
+            final int lastCat = maxCatScroll;
+            flat(8, sBottom - itemH, sidebarW, itemH, "v", Panel.BUTTON, catScroll < maxCatScroll, b -> {
+                catScroll = Math.min(lastCat, catScroll + 3);
                 rebuildWidgets();
-            }).bounds(8, sBottom - itemH, sidebarW, itemH).build();
-            down.active = catScroll < maxCatScroll;
-            addRenderableWidget(down);
+            });
         }
 
-        // ---- Überschrift
-        addRenderableWidget(centerText(centerX, 46,
-                Component.literal(cat.label() + "  -  " + packs.size() + " Packs")));
+        // ---- heading
+        addRenderableWidget(centerText(centerX, 49,
+                Component.literal(cat.label() + "  -  " + packs.size() + " packs"), WHITE));
 
-        // ---- Auswahlfelder: Basis, Aus, dann alle Packs
+        // ---- selection grid: Base, Off, then every pack
         List<String> options = new ArrayList<>();
         options.add(MixSettings.INHERIT);
         options.add(MixSettings.OFF);
         options.addAll(packs);
 
-        int top = 60;
+        int top = 64;
         int bottom = this.height - 48;
         int blockW = Math.max(1, this.font.width(BLOCK));
-        int cpp = Math.max(1, Math.round(9f / blockW)); // Zeichen pro Bildpunkt, damit er etwa quadratisch wirkt
+        int cpp = Math.max(1, Math.round(9f / blockW));
         int pxW = cpp * blockW;
 
-        // Größte Vorschau wählen, bei der mindestens 6 Felder gleichzeitig sichtbar sind
+        // largest preview that still shows at least 6 cells at once
         int res = 6, cols = 1, rows = 1, cellW = 0, cellH = 0;
         for (int r = 20; r >= 6; r--) {
             int cw = r * pxW + 8;
@@ -185,13 +187,16 @@ public class MixScreen extends Screen {
             int k = i - from;
             int x = x0 + (k % cols) * (cellW + 4);
             int y = top + (k / cols) * (cellH + 4);
+            boolean selected = current.equals(value);
 
-            addRenderableWidget(Button.builder(Component.empty(), b -> {
+            panels.add(new Panel(x, y, cellW, cellH, selected ? Panel.CELL_SELECTED : Panel.CELL, true));
+            Button hit = Button.builder(Component.empty(), b -> {
                 settings.choices.put(cat, value);
                 rebuildWidgets();
-            }).bounds(x, y, cellW, cellH).build());
+            }).bounds(x, y, cellW, cellH).build();
+            Compat.hide(hit);
+            addRenderableWidget(hit);
 
-            // Welches Pack liefert das Bild für dieses Feld?
             String previewPack = value.equals(MixSettings.OFF) ? null
                     : value.equals(MixSettings.INHERIT) ? settings.basePack : value;
             int[] px = previewPack == null ? null : preview(cat, previewPack, res);
@@ -202,7 +207,7 @@ public class MixScreen extends Screen {
                     for (int c = 0; c < res; c++) {
                         int p = px[r * res + c];
                         boolean solid = (p >>> 24) >= 100;
-                        int rgb = solid ? (p & 0xFFFFFF) : 0x262626;
+                        int rgb = solid ? (p & 0xFFFFFF) : 0x1B1B2C;
                         row.append(Component.literal(BLOCK.repeat(cpp)).withStyle(Style.EMPTY.withColor(rgb)));
                     }
                     addRenderableWidget(new StringWidget(x + (cellW - res * pxW) / 2, y + 4 + r * LINE_H,
@@ -210,70 +215,53 @@ public class MixScreen extends Screen {
                 }
             } else {
                 String hint = value.equals(MixSettings.OFF) ? "Vanilla"
-                        : (previewPack == null ? "-" : "kein Bild");
-                Component hc = Component.literal(this.font.plainSubstrByWidth(hint, cellW - 6))
-                        .withStyle(Style.EMPTY.withColor(0xAAAAAA));
-                int hw = this.font.width(hc);
-                addRenderableWidget(new StringWidget(x + (cellW - hw) / 2, y + cellH / 2 - 10, hw, LINE_H, hc, this.font));
+                        : (previewPack == null ? "-" : "no preview");
+                addRenderableWidget(centerText(x + cellW / 2, y + cellH / 2 - 8,
+                        Component.literal(this.font.plainSubstrByWidth(hint, cellW - 6)), GREY));
             }
 
-            boolean selected = current.equals(value);
-            String name = value.equals(MixSettings.INHERIT) ? "Basis"
-                    : value.equals(MixSettings.OFF) ? "Aus" : shortName(value);
+            String name = value.equals(MixSettings.INHERIT) ? "Base"
+                    : value.equals(MixSettings.OFF) ? "Off" : shortName(value);
             String text = this.font.plainSubstrByWidth((selected ? "\u2714 " : "") + name, cellW - 6);
-            Component nc = Component.literal(text).withStyle(Style.EMPTY.withColor(selected ? 0x55FF55 : 0xFFFFFF));
-            int nw = this.font.width(nc);
-            addRenderableWidget(new StringWidget(x + (cellW - nw) / 2, y + cellH - 12, nw, LINE_H, nc, this.font));
+            addRenderableWidget(centerText(x + cellW / 2, y + cellH - 12, Component.literal(text),
+                    selected ? PINK : WHITE));
         }
 
-        // ---- Scroll-Knöpfe rechts neben dem Gitter (zusätzlich zum Mausrad)
-        Button gridUp = Button.builder(Component.literal("^"), b -> {
+        // ---- scroll buttons next to the grid (in addition to the mouse wheel)
+        flat(gx1 + 6, top, 20, 20, "^", Panel.BUTTON, rowScroll > 0, b -> {
             rowScroll = Math.max(0, rowScroll - 1);
             rebuildWidgets();
-        }).bounds(gx1 + 6, top, 20, 20).build();
-        gridUp.active = rowScroll > 0;
-        addRenderableWidget(gridUp);
+        });
         final int lastScroll = maxRowScroll;
-        Button gridDown = Button.builder(Component.literal("v"), b -> {
+        flat(gx1 + 6, bottom - 20, 20, 20, "v", Panel.BUTTON, rowScroll < maxRowScroll, b -> {
             rowScroll = Math.min(lastScroll, rowScroll + 1);
             rebuildWidgets();
-        }).bounds(gx1 + 6, bottom - 20, 20, 20).build();
-        gridDown.active = rowScroll < maxRowScroll;
-        addRenderableWidget(gridDown);
+        });
 
-        // ---- Status
+        // ---- status line
         status = centerText(centerX, this.height - 38, Component.literal(
                 statusText != null ? statusText
-                : packs.isEmpty() ? "Keine Packs gefunden: lege ZIPs in .minecraft/murmelspacks"
-                : "Zeile " + (rowScroll + 1) + " von " + totalRows + "  -  Mausrad zum Scrollen"));
+                : packs.isEmpty() ? "No packs found: put ZIPs into .minecraft/murmelspacks (use Open Folder)"
+                : "Row " + (rowScroll + 1) + " of " + totalRows + "  -  mouse wheel to scroll"), GREY);
         addRenderableWidget(status);
 
-        // ---- Unten: Durchsicht | Anwenden | Fertig
+        // ---- bottom row: Dim | Open Folder | Apply | Done
         int by = this.height - 26;
-        int bw3 = 92;
-        addRenderableWidget(Button.builder(clearLabel(bw3 - 8), b -> {
-            settings.clearBackground = !settings.clearBackground;
-            if (settings.clearBackground) MenuBlur.disable(this.minecraft.options);
-            else MenuBlur.restore();
-            b.setMessage(clearLabel(bw3 - 8));
-        }).bounds(centerX - bw3 - bw3 / 2 - 4, by, bw3, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Anwenden"), b -> apply())
-                .bounds(centerX - bw3 / 2, by, bw3, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Fertig"), b -> onClose())
-                .bounds(centerX + bw3 / 2 + 4, by, bw3, 20).build());
+        int b4 = Math.min(104, (gw - 12) / 4);
+        int startX = centerX - (4 * b4 + 12) / 2;
+        flat(startX, by, b4, 20,
+                "Dim: " + (settings.dim == 0 ? "Off" : settings.dim == 1 ? "Light" : "Dark"),
+                Panel.BUTTON, true, b -> {
+            settings.dim = (settings.dim + 1) % 3;
+            rebuildWidgets();
+        });
+        flat(startX + (b4 + 4), by, b4, 20, "Open Folder", Panel.BUTTON, true, b -> openFolder());
+        flat(startX + 2 * (b4 + 4), by, b4, 20, "Apply", Panel.ACTIVE, true, b -> apply());
+        flat(startX + 3 * (b4 + 4), by, b4, 20, "Done", Panel.BUTTON, true, b -> onClose());
     }
 
-    /**
-     * Sagt Minecraft, dass dieses Menü wie ein Inventar behandelt wird: Dann gibt es nur eine leichte
-     * Abdunklung statt der Hintergrund-Unschärfe, und man sieht das Spiel dahinter klar.
-     */
-    // (bewusst ohne @Override: so bricht der Bau nicht, falls eine Version die Methode nicht kennt)
-    public boolean isInGameUi() {
-        return settings.clearBackground;
-    }
-
-    /** Mausrad: links über der Kategorie-Liste scrollt die Liste, sonst das Pack-Gitter. */
-    // (bewusst ohne @Override: so bricht der Bau nicht, falls sich die Signatur in einer Version ändert)
+    /** Mouse wheel: over the category list it scrolls the list, otherwise the pack grid. */
+    // (deliberately without @Override so the build cannot break if a version changes the signature)
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         int dir = scrollY > 0 ? -1 : 1;
         if (mouseX < sidebarW + 12) catScroll += dir;
@@ -282,16 +270,31 @@ public class MixScreen extends Screen {
         return true;
     }
 
-    // ------------------------------------------------------------------ Helfer
+    // ------------------------------------------------------------------ helpers
 
-    private StringWidget centerText(int cx, int y, Component text) {
-        int tw = this.font.width(text);
-        return new StringWidget(cx - tw / 2, y, tw, 9, text, this.font);
+    /** A flat button: invisible vanilla button for the clicks, our panel behind it, our label on top. */
+    private Button flat(int x, int y, int w, int h, String label, int style, boolean enabled, Button.OnPress press) {
+        panels.add(new Panel(x, y, w, h, enabled ? style : Panel.DISABLED, enabled));
+        Button b = Button.builder(Component.empty(), press).bounds(x, y, w, h).build();
+        Compat.hide(b);
+        b.active = enabled;
+        addRenderableWidget(b);
+        if (!label.isEmpty()) {
+            String t = this.font.plainSubstrByWidth(label, w - 8);
+            addRenderableWidget(centerText(x + w / 2, y + (h - 8) / 2, Component.literal(t), enabled ? WHITE : GREY));
+        }
+        return b;
+    }
+
+    private StringWidget centerText(int cx, int y, Component text, int color) {
+        Component c = color < 0 ? text : text.copy().withStyle(Style.EMPTY.withColor(color));
+        int tw = this.font.width(c);
+        return new StringWidget(cx - tw / 2, y, tw, 9, c, this.font);
     }
 
     private void setStatus(String text) {
         statusText = text;
-        Component c = Component.literal(text);
+        Component c = Component.literal(text).withStyle(Style.EMPTY.withColor(GREY));
         int tw = this.font.width(c);
         status.setMessage(c);
         status.setWidth(tw);
@@ -305,13 +308,13 @@ public class MixScreen extends Screen {
         try (PackSource src = PackScanner.open(packDirs, packId)) {
             px = Preview.load(src, cat, res);
         } catch (Exception ignored) {
-            // Pack nicht lesbar -> kein Vorschaubild
+            // pack unreadable -> no preview
         }
         previewCache.put(key, px);
         return px;
     }
 
-    /** Basis: kein Pack -> Pack 1 -> Pack 2 -> ... -> kein Pack */
+    /** Base pack: none -> pack 1 -> pack 2 -> ... -> none */
     private String nextBase(String current) {
         if (packs.isEmpty()) return null;
         if (current == null) return packs.get(0);
@@ -319,35 +322,30 @@ public class MixScreen extends Screen {
         return (i < 0 || i + 1 >= packs.size()) ? null : packs.get(i + 1);
     }
 
-    private Component baseLabel(int maxWidth) {
-        String name = settings.basePack == null ? "keins" : shortName(settings.basePack);
-        return Component.literal(this.font.plainSubstrByWidth("Basis: " + name, maxWidth));
-    }
-
-    private Component shieldLabel() {
-        String v = settings.sideShield == 0 ? "Aus" : settings.sideShield == 1 ? "Klein" : "Normal";
-        return Component.literal("Side Shield: " + v);
-    }
-
-    private Component fireLabel() {
-        String v = settings.lowFire == 0 ? "Aus" : settings.lowFire == 1 ? "Mittel" : "Niedrig";
-        return Component.literal("Low Fire: " + v);
-    }
-
-    private Component clearLabel(int maxWidth) {
-        return Component.literal(this.font.plainSubstrByWidth(
-                "Durchsicht: " + (settings.clearBackground ? "An" : "Aus"), maxWidth));
-    }
-
     private static String shortName(String id) {
         return id.toLowerCase().endsWith(".zip") ? id.substring(0, id.length() - 4) : id;
     }
 
-    // ------------------------------------------------------------------ Mischen & aktivieren
+    private void openFolder() {
+        final Minecraft mc = this.minecraft;
+        CompletableFuture.runAsync(() -> {
+            try {
+                if (java.awt.Desktop.isDesktopSupported()) {
+                    java.awt.Desktop.getDesktop().open(extraDir.toFile());
+                    return;
+                }
+            } catch (Exception ignored) {
+                // fall through to the path hint
+            }
+            mc.execute(() -> setStatus("Folder: " + extraDir));
+        });
+    }
+
+    // ------------------------------------------------------------------ mix & enable
 
     private void apply() {
         final Minecraft mc = this.minecraft;
-        setStatus("Mische Packs ...");
+        setStatus("Mixing packs ...");
         CompletableFuture.supplyAsync(() -> {
             try {
                 settings.save(settingsFile);
@@ -358,13 +356,13 @@ public class MixScreen extends Screen {
         }).whenComplete((result, error) -> mc.execute(() -> {
             if (error != null) {
                 Throwable t = error.getCause() != null ? error.getCause() : error;
-                setStatus("Fehler: " + t.getMessage());
+                setStatus("Error: " + t.getMessage());
                 return;
             }
             enableAndReload(mc);
             setStatus(result.warnings().isEmpty()
-                    ? result.filesCopied() + " Dateien gemischt und aktiviert."
-                    : "Aktiviert, aber: " + result.warnings().get(0));
+                    ? result.filesCopied() + " files mixed and enabled."
+                    : "Enabled, but: " + result.warnings().get(0));
         }));
     }
 
@@ -375,23 +373,16 @@ public class MixScreen extends Screen {
         List<String> before = new ArrayList<>(repo.getSelectedIds());
         List<String> after = new ArrayList<>(before);
         after.remove(id);
-        after.add(id); // ganz oben = höchste Priorität
+        after.add(id); // top of the list = highest priority
         repo.setSelected(after);
         mc.options.updateResourcePacks(repo);
         if (after.equals(before)) {
-            mc.reloadResourcePacks(); // Pack war schon aktiv, Inhalt hat sich aber geändert
+            mc.reloadResourcePacks(); // pack was already active but its content changed
         }
     }
 
     @Override
     public void onClose() {
-        MenuBlur.restore();
         Compat.openScreen(this.minecraft, parent);
-    }
-
-    /** Wird aufgerufen, wenn das Menü auf irgendeinem Weg geschlossen wird. */
-    // (bewusst ohne @Override, siehe mouseScrolled)
-    public void removed() {
-        MenuBlur.restore();
     }
 }

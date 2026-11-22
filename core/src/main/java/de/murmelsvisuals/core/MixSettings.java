@@ -11,9 +11,9 @@ import java.util.Properties;
 
 /** Deine Auswahl: ein Basis-Pack plus pro Kategorie ein Quell-Pack. */
 public final class MixSettings {
-    /** Kategorie folgt dem Basis-Pack. */
+    /** Category follows the base pack. */
     public static final String INHERIT = "";
-    /** Kategorie wird komplett weggelassen (Vanilla-Aussehen). */
+    /** Category is left out completely (vanilla look). */
     public static final String OFF = "<off>";
 
     public String basePack = null; // null = kein Basis-Pack
@@ -21,8 +21,8 @@ public final class MixSettings {
     public int lowFire = 0;
     /** Side Shield: 0 = aus, 1 = an (klein beim Blocken), 2 = an (normale Größe beim Blocken). */
     public int sideShield = 0;
-    /** Menühintergrund durchsichtig statt unscharf. */
-    public boolean clearBackground = true;
+    /** Menu background dimming: 0 = clear, 1 = light, 2 = dark. */
+    public int dim = 1;
     public final Map<Category, String> choices = new EnumMap<>(Category.class);
 
     public String choiceFor(Category c) {
@@ -57,7 +57,8 @@ public final class MixSettings {
             try { s.sideShield = Math.max(0, Math.min(2, Integer.parseInt(ss))); }
             catch (NumberFormatException e) { s.sideShield = 0; }
         }
-        s.clearBackground = Boolean.parseBoolean(p.getProperty("clearBackground", "true").trim());
+        try { s.dim = Math.max(0, Math.min(2, Integer.parseInt(p.getProperty("dim", "1").trim()))); }
+        catch (NumberFormatException e) { s.dim = 1; }
         for (Category c : Category.values()) {
             String v = p.getProperty("cat." + c.id());
             if (v != null && !v.isEmpty()) s.choices.put(c, v);
@@ -70,7 +71,7 @@ public final class MixSettings {
         p.setProperty("base", basePack == null ? "" : basePack);
         p.setProperty("lowFire", Integer.toString(lowFire));
         p.setProperty("sideShield", Integer.toString(sideShield));
-        p.setProperty("clearBackground", Boolean.toString(clearBackground));
+        p.setProperty("dim", Integer.toString(dim));
         for (Map.Entry<Category, String> e : choices.entrySet()) {
             if (!e.getValue().isEmpty()) p.setProperty("cat." + e.getKey().id(), e.getValue());
         }

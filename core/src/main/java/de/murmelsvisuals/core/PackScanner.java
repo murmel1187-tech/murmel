@@ -40,10 +40,10 @@ public final class PackScanner {
     public static PackSource open(List<Path> dirs, String id) throws IOException {
         for (Path dir : dirs) {
             Path p = dir.resolve(id).normalize();
-            if (!p.startsWith(dir.normalize())) throw new IOException("Ungültiger Pack-Name: " + id);
+            if (!p.startsWith(dir.normalize())) throw new IOException("Invalid pack name: " + id);
             if (Files.isDirectory(p)) return new DirPackSource(p);
             if (Files.isRegularFile(p)) return new ZipPackSource(p);
         }
-        throw new IOException("Pack nicht gefunden: " + id);
+        throw new IOException("Pack not found: " + id);
     }
 }

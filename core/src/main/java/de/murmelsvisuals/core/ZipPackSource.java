@@ -54,7 +54,7 @@ public final class ZipPackSource implements PackSource {
     @Override
     public InputStream open(String path) throws IOException {
         ZipEntry e = zip.getEntry(prefix + path);
-        if (e == null) throw new IOException("Nicht im ZIP: " + path);
+        if (e == null) throw new IOException("Not in ZIP: " + path);
         return zip.getInputStream(e);
     }
 

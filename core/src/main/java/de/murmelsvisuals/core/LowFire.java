@@ -25,7 +25,7 @@ final class LowFire {
             img = ImageIO.read(png.toFile()); // Textur aus dem gewählten Feuer-Pack
         } else {
             try (InputStream in = Vanilla.open(PNG)) {
-                if (in == null) return "Low Fire: Original-Feuertextur nicht gefunden.";
+                if (in == null) return "Low Fire: original fire texture not found.";
                 img = ImageIO.read(in);
             }
             Files.createDirectories(png.getParent());
@@ -35,7 +35,7 @@ final class LowFire {
                 else Files.writeString(metaOut, "{\"animation\":{\"frametime\":2}}", StandardCharsets.UTF_8);
             }
         }
-        if (img == null) return "Low Fire: Feuertextur konnte nicht gelesen werden.";
+        if (img == null) return "Low Fire: could not read the fire texture.";
         ImageIO.write(crop(img, level == 2 ? 0.28 : 0.5), "png", png.toFile());
         return null;
     }

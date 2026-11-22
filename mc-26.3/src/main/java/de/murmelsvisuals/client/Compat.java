@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.resources.Identifier;
 
@@ -35,6 +36,15 @@ final class Compat {
         boolean pressed = false;
         while (openKey.consumeClick()) pressed = true;
         return pressed;
+    }
+
+    /** Makes a widget invisible but keeps it clickable (we draw the look ourselves). */
+    static void hide(AbstractWidget w) {
+        try {
+            AbstractWidget.class.getMethod("setAlpha", float.class).invoke(w, 0f);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            // keep the vanilla look if this version has no setAlpha
+        }
     }
 
     static void openScreen(Minecraft mc, Screen screen) {

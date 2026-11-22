@@ -76,8 +76,8 @@ public final class PackMixer {
         if (Files.exists(out)) {
             // Nur löschen, was wir selbst erzeugt haben.
             if (!Files.exists(out.resolve(MARKER))) {
-                throw new IOException("Ordner " + out.getFileName()
-                        + " existiert schon und stammt nicht von MurmelsVisuals – bitte umbenennen.");
+                throw new IOException("Folder " + out.getFileName()
+                        + " already exists and was not created by MurmelsVisuals - please rename it.");
             }
             try (Stream<Path> s = Files.walk(out)) {
                 s.sorted(Comparator.reverseOrder())
@@ -87,6 +87,6 @@ public final class PackMixer {
         } else {
             Files.createDirectories(out);
         }
-        Files.writeString(out.resolve(MARKER), "Von MurmelsVisuals erzeugt. Wird bei jedem Anwenden neu geschrieben.");
+        Files.writeString(out.resolve(MARKER), "Created by MurmelsVisuals. Rewritten every time you press Apply.");
     }
 }

@@ -3,11 +3,17 @@
   "id": "murmelsvisuals",
   "version": "${version}",
   "name": "MurmelsVisuals",
-  "description": "Mische Texturen aus mehreren Resource Packs ingame zu einem einzigen Pack. Menü per /murmels.",
-  "authors": ["Murmel"],
+  "description": "Mix textures from several resource packs into one pack, right in game. Open the menu with M or /murmelsvisuals.",
+  "authors": [
+    "Murmel"
+  ],
   "license": "MIT",
   "environment": "client",
-  "entrypoints": { "client": ["de.murmelsvisuals.client.MurmelsVisualsClient"] },
+  "entrypoints": {
+    "client": [
+      "de.murmelsvisuals.client.MurmelsVisualsClient"
+    ]
+  },
   "depends": {
     "fabricloader": ">=0.18.1",
     "minecraft": "~1.21.11",

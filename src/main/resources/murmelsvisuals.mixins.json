@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.murmelsvisuals.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ScreenEffectRendererStaticMixin",
+    "ScreenEffectRendererInstanceMixin",
+    "FirstPersonItemMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

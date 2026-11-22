@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "murmelsvisuals",
+  "version": "${version}",
+  "name": "MurmelsVisuals",
+  "description": "Client-side visuals hub: Low Fire, Side Shield and a full resource pack manager behind a modern dark GUI.",
+  "authors": ["Murmel"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.murmelsvisuals.MurmelsVisualsClient"]
+  },
+  "mixins": [
+    { "config": "murmelsvisuals.mixins.json", "environment": "client" }
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

@@ -1,25 +1,34 @@
 # MurmelsVisuals
 
-Clientseitige Fabric-Mod: Mische Texturen aus mehreren Resource Packs ingame zu **einem** Pack.
+Client-side Fabric mod: mix textures from several resource packs into **one** pack, right in game.
 
-## Benutzung
-1. Lade deine Packs (z. B. von packsmc.net) und lege sie als ZIP oder Ordner in .minecraft/resourcepacks.
-2. Starte Minecraft mit dieser Mod (und Fabric API) und öffne im Spiel (in einer Welt) den Chat: /murmels
-3. Wähle oben ein **Basis-Pack** (liefert alles, was du nicht einzeln zuordnest).
-4. Klicke bei jeder Kategorie (Crystals, Totems, Schwerter, Rüstung, ...) so lange, bis das gewünschte Pack dasteht.
-   Die Reihenfolge ist: Basis, Aus (Vanilla), dann deine Packs.
-5. **Anwenden** erzeugt das Pack MurmelsVisuals_Mix, aktiviert es ganz oben und lädt neu.
-   Deine Original-Packs werden nicht verändert.
+## How to use
+1. Put your packs (ZIP files or folders) into `.minecraft/murmelspacks`
+   (this folder is only seen by the mod, so Minecraft's normal pack list stays clean) or into `.minecraft/resourcepacks`.
+   The **Open Folder** button in the menu opens `murmelspacks` for you.
+2. In a world, press **M** (rebindable under Options > Controls) or type `/murmelsvisuals`.
+3. Pick a **Base** pack (it provides everything you do not assign on its own).
+4. Choose a category on the left (Crystals, Totems, Swords, Armor, Hearts, Hotbar, ...) and click the pack you want for it.
+   `Base` follows the base pack, `Off` keeps the vanilla look. Scroll with the mouse wheel.
+5. **Apply** creates the pack `MurmelsVisuals_Mix`, enables it on top and reloads. Your original packs are never changed.
 
-## Bauen (zwei getrennte Projekte)
-Benötigt JDK 21 (für 1.21.11) bzw. JDK 25 (für 26.3) und Gradle 9.6.0 (oder neuer).
-    cd mc-1.21.11  &&  gradle wrapper --gradle-version 9.6.0  &&  ./gradlew build
-    cd mc-26.3     &&  gradle wrapper --gradle-version 9.6.0  &&  ./gradlew build
-Die fertige Datei liegt danach in build/libs/ (die Datei ohne -sources). Unter Windows: gradlew.bat build.
+## Previews
+Every field shows the real picture from the pack. Items that have a 3D model in the pack (for example the end crystal in the xyzoom packs) are drawn as a 3D render like in the inventory. Pictures load in the background. If a pack has nothing custom for a category, the vanilla look is shown instead. Crystals are drawn like in the world (three tilted cubes with the pack's entity texture).
 
-Falls Gradle eine Version nicht findet, trage die aktuellen Werte von https://fabricmc.net/develop in
-die jeweilige gradle.properties ein.
+## Extras
+- **Enchant Glint** category: pick the glint look (item, entity and armor glint) from any pack.
+- **Low Fire**: Off / Medium / Low. Cuts the top of the first-person fire overlay.
+- **Side Shield**: Off / Small / Normal. The shield rests at the side in first person and is smaller while blocking.
+- **Dim**: how dark the menu background is (Off = completely clear).
 
-## Hinweise
-- Resource-Pack-Format: 1.21.11 = 75, 26.3 = 97 (steht in VersionInfo.java der jeweiligen Version).
-- Es sind keine fremden Texturen enthalten. Beachte die Lizenzen der Packs, die du mischst, und gib das gemischte Pack nicht weiter.
+## Building
+Needs JDK 21 (1.21.11) or JDK 25 (26.3) and Gradle 9.6.0.
+
+    cd mc-1.21.11 && gradle wrapper --gradle-version 9.6.0 && ./gradlew build
+    cd mc-26.3    && gradle wrapper --gradle-version 9.6.0 && ./gradlew build
+
+The jar ends up in `build/libs/` (use the one without `-sources`).
+
+## Notes
+- Resource pack format: 1.21.11 = 75, 26.3 = 97 (see `VersionInfo.java` in each version folder).
+- No third-party textures are included. Respect the licenses of the packs you mix and do not redistribute the mixed pack.
